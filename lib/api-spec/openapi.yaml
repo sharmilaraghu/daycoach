@@ -1,0 +1,667 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: DayCoach API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: tasks
+    description: Daily task management
+  - name: checkin
+    description: Morning and evening check-ins
+  - name: patterns
+    description: User behavioral patterns and streaks
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /tasks/today:
+    get:
+      operationId: getTodayTasks
+      tags: [tasks]
+      summary: Get today's tasks
+      responses:
+        "200":
+          description: List of today's tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+  /tasks:
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a new task for today
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskBody"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}/complete:
+    patch:
+      operationId: completeTask
+      tags: [tasks]
+      summary: Mark a task as complete or incomplete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteTaskBody"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResult"
+
+  /checkin/morning:
+    post:
+      operationId: morningCheckin
+      tags: [checkin]
+      summary: Generate morning briefing audio
+      responses:
+        "200":
+          description: Morning briefing with audio URL and script
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckinResult"
+
+  /checkin/evening:
+    post:
+      operationId: eveningCheckin
+      tags: [checkin]
+      summary: Generate evening recap audio based on completed tasks
+      responses:
+        "200":
+          description: Evening recap with audio URL and script
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckinResult"
+
+  /patterns:
+    get:
+      operationId: getPatterns
+      tags: [patterns]
+      summary: Get user behavioral patterns
+      responses:
+        "200":
+          description: User patterns including streak, voice persona, and history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPatterns"
+
+  /history:
+    get:
+      operationId: getHistory
+      tags: [patterns]
+      summary: Get recent daily summaries (last 14 days)
+      responses:
+        "200":
+          description: List of daily summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailySummary"
+
+  /voice-personas:
+    get:
+      operationId: getVoicePersonas
+      tags: [patterns]
+      summary: Get available voice personas
+      responses:
+        "200":
+          description: List of voice personas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VoicePersona"
+
+  /tasks/validate:
+    post:
+      operationId: validateTask
+      tags: [tasks]
+      summary: Validate task specificity and get voice coaching tip if vague
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateTaskBody"
+      responses:
+        "200":
+          description: Validation result with optional coaching tip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateTaskResult"
+
+  /agent/session:
+    post:
+      operationId: getAgentSession
+      tags: [checkin]
+      summary: Get a signed ElevenLabs Conversational AI session URL with user context
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSessionBody"
+      responses:
+        "200":
+          description: Signed URL and persona details for live conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSessionResult"
+
+  /agent/conversation-log:
+    post:
+      operationId: logConversationEnd
+      tags: [checkin]
+      summary: Log the result of a completed agent conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationLogBody"
+      responses:
+        "200":
+          description: Log recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationLogResult"
+
+  /agent/webhook:
+    post:
+      operationId: agentWebhook
+      tags: [checkin]
+      summary: Post-call webhook from ElevenLabs with transcript and metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentWebhookBody"
+      responses:
+        "200":
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentWebhookResult"
+
+  /demo/toggle:
+    post:
+      operationId: toggleDemoMode
+      tags: [patterns]
+      summary: Toggle demo mode to simulate missed-days Commander persona state
+      responses:
+        "200":
+          description: New demo mode state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoModeResult"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+        completed:
+          type: boolean
+        date:
+          type: string
+          description: ISO date string (YYYY-MM-DD)
+        category:
+          type: string
+          description: One of health, work, learning, mindset
+        createdAt:
+          type: string
+      required:
+        - id
+        - text
+        - completed
+        - date
+        - category
+        - createdAt
+
+    CreateTaskBody:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+        - text
+
+    CompleteTaskBody:
+      type: object
+      properties:
+        completed:
+          type: boolean
+      required:
+        - completed
+
+    DeleteResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    CheckinResult:
+      type: object
+      properties:
+        script:
+          type: string
+          description: The spoken text
+        audioUrl:
+          type: string
+          description: URL to the generated audio file
+        voicePersona:
+          type: string
+          description: Which voice persona was used
+        voicePersonaLabel:
+          type: string
+          description: Human-friendly label for the persona
+      required:
+        - script
+        - audioUrl
+        - voicePersona
+        - voicePersonaLabel
+
+    CategoryStreak:
+      type: object
+      properties:
+        category:
+          type: string
+          description: One of health, work, learning, mindset
+        label:
+          type: string
+          description: Human-friendly category name
+        streak:
+          type: integer
+          description: Current consecutive days with at least one completed task in this category
+        insight:
+          type: string
+          description: A short pattern insight for this category
+      required:
+        - category
+        - label
+        - streak
+        - insight
+
+    UserPatterns:
+      type: object
+      properties:
+        currentStreak:
+          type: integer
+          description: Number of consecutive days with at least one completed task
+        longestStreak:
+          type: integer
+        missedDaysLast7:
+          type: integer
+          description: Number of days in the last 7 with zero completions
+        completionRateLast7:
+          type: number
+          description: Fraction of tasks completed over last 7 days (0-1)
+        activeVoicePersona:
+          type: string
+          description: The voice persona key that will be used today
+        activeVoicePersonaLabel:
+          type: string
+        activeVoicePersonaReason:
+          type: string
+          description: Why this persona was chosen
+        totalTasksCompleted:
+          type: integer
+        todayCompleted:
+          type: integer
+        todayTotal:
+          type: integer
+        categoryStreaks:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryStreak"
+          description: Per-category streaks and insights
+        demoMode:
+          type: boolean
+          description: Whether demo mode (Commander persona simulation) is active
+      required:
+        - currentStreak
+        - longestStreak
+        - missedDaysLast7
+        - completionRateLast7
+        - activeVoicePersona
+        - activeVoicePersonaLabel
+        - activeVoicePersonaReason
+        - totalTasksCompleted
+        - todayCompleted
+        - todayTotal
+        - categoryStreaks
+        - demoMode
+
+    DailySummary:
+      type: object
+      properties:
+        date:
+          type: string
+        totalTasks:
+          type: integer
+        completedTasks:
+          type: integer
+        completionRate:
+          type: number
+        voicePersonaUsed:
+          type: string
+        hadCheckin:
+          type: boolean
+      required:
+        - date
+        - totalTasks
+        - completedTasks
+        - completionRate
+        - voicePersonaUsed
+        - hadCheckin
+
+    VoicePersona:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        condition:
+          type: string
+          description: When this persona is used
+      required:
+        - key
+        - label
+        - description
+        - condition
+
+    ValidateTaskBody:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+        - text
+
+    ValidateTaskResult:
+      type: object
+      properties:
+        isVague:
+          type: boolean
+          description: Whether the task is considered too vague
+        suggestion:
+          type: string
+          description: Coaching suggestion text if vague, null otherwise
+          nullable: true
+        audioUrl:
+          type: string
+          description: URL to play coaching audio if vague, null otherwise
+          nullable: true
+      required:
+        - isVague
+
+    TaskRef:
+      type: object
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+        completed:
+          type: boolean
+        category:
+          type: string
+          nullable: true
+          description: Optional task category (Health, Work, Learning, Mindset)
+      required:
+        - id
+        - text
+        - completed
+
+    AgentSessionBody:
+      type: object
+      properties:
+        currentStreak:
+          type: integer
+        todayCompleted:
+          type: integer
+        todayTotal:
+          type: integer
+        missedDaysLast7:
+          type: integer
+        activeVoicePersona:
+          type: string
+        activeVoicePersonaLabel:
+          type: string
+        taskTexts:
+          type: array
+          items:
+            type: string
+        tasks:
+          type: array
+          description: Structured task list with IDs for client tool use
+          items:
+            $ref: "#/components/schemas/TaskRef"
+        isEvening:
+          type: boolean
+          description: Whether this is an evening check-in session
+        mode:
+          type: string
+          description: Session mode - checkin (default) or review
+          enum: [checkin, review]
+      required:
+        - currentStreak
+        - todayCompleted
+        - todayTotal
+        - missedDaysLast7
+        - activeVoicePersona
+        - activeVoicePersonaLabel
+        - taskTexts
+
+    AgentSessionResult:
+      type: object
+      properties:
+        signedUrl:
+          type: string
+          description: Signed WSS URL for ElevenLabs Conversational AI
+          nullable: true
+        agentId:
+          type: string
+          description: ElevenLabs agent ID
+          nullable: true
+        voicePersona:
+          type: string
+        voicePersonaLabel:
+          type: string
+        available:
+          type: boolean
+          description: Whether the agent conversation is available
+        systemPrompt:
+          type: string
+          description: Personalized system prompt to inject as override
+          nullable: true
+        firstMessage:
+          type: string
+          description: Context-aware opening message for the agent
+          nullable: true
+      required:
+        - voicePersona
+        - voicePersonaLabel
+        - available
+
+    ConversationLogBody:
+      type: object
+      properties:
+        voicePersona:
+          type: string
+        voicePersonaLabel:
+          type: string
+        startedAt:
+          type: string
+          description: ISO timestamp when conversation started
+        durationSeconds:
+          type: integer
+          nullable: true
+        disconnectReason:
+          type: string
+          nullable: true
+        mode:
+          type: string
+          nullable: true
+          description: Session mode (checkin or review)
+      required:
+        - voicePersona
+        - voicePersonaLabel
+        - startedAt
+
+    ConversationLogResult:
+      type: object
+      properties:
+        logged:
+          type: boolean
+      required:
+        - logged
+
+    AgentWebhookBody:
+      type: object
+      description: Post-call webhook payload from ElevenLabs
+      properties:
+        type:
+          type: string
+          description: Event type (e.g. conversation.ended)
+        event_timestamp:
+          type: integer
+          nullable: true
+        data:
+          type: object
+          nullable: true
+          properties:
+            conversation_id:
+              type: string
+              nullable: true
+            agent_id:
+              type: string
+              nullable: true
+            status:
+              type: string
+              nullable: true
+            transcript:
+              type: array
+              nullable: true
+              items:
+                type: object
+                properties:
+                  role:
+                    type: string
+                  message:
+                    type: string
+            metadata:
+              type: object
+              nullable: true
+      required:
+        - type
+
+    AgentWebhookResult:
+      type: object
+      properties:
+        received:
+          type: boolean
+      required:
+        - received
+
+    DemoModeResult:
+      type: object
+      properties:
+        demoMode:
+          type: boolean
+          description: Current demo mode state after toggle
+      required:
+        - demoMode
