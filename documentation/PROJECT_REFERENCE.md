@@ -95,13 +95,12 @@ The coach calls these during live conversation. The ElevenLabs SDK fires the bro
 
 | Tool | Handler in App.tsx | API call |
 |---|---|---|
-| `complete_task(task_id)` | lines ~304–323 | `PATCH /api/tasks/:id/complete` |
-| `add_task(text)` | lines ~324–338 | `POST /api/tasks` |
+| `complete_task(task_id)` | clientTools in Home() | `PATCH /api/tasks/:id/complete` |
+| `add_task(text)` | clientTools in Home() | `POST /api/tasks` |
+| `update_task(task_id, text)` | clientTools in Home() | `PATCH /api/tasks/:id` |
+| `delete_task(task_id)` | clientTools in Home() | `DELETE /api/tasks/:id` |
 
-**Dashboard setup required for each agent:**
-- Agent Settings → Tools → Add Client Tool
-- `complete_task`: parameter `task_id` (number, required)
-- `add_task`: parameter `text` (string, required)
+All four tools are registered on each agent via the ElevenLabs API (no manual dashboard step needed — see registration script in git history).
 
 **Override settings required for each agent:**
 - Agent Settings → Security → Allow client to override: **System prompt** ✓ and **First message** ✓

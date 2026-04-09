@@ -75,15 +75,21 @@ The coach calls these during live conversations to update the app.
 
 Add two tools to each agent (**Agent Settings → Tools → Add tool → Client tool**):
 
-**Tool 1**
-- Name: `complete_task`
+**Tool 1 — `complete_task`**
 - Description: `Mark a task as complete`
 - Parameter: `task_id` — type `number`, required
 
-**Tool 2**
-- Name: `add_task`
+**Tool 2 — `add_task`**
 - Description: `Add a new task to today's list`
 - Parameter: `text` — type `string`, required
+
+**Tool 3 — `update_task`**
+- Description: `Update the text of an existing task`
+- Parameters: `task_id` — type `number`, required; `text` — type `string`, required
+
+**Tool 4 — `delete_task`**
+- Description: `Delete a task from today's list`
+- Parameter: `task_id` — type `number`, required
 
 ### 4d. (Optional) Webhook — production only
 

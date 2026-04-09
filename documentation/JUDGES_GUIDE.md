@@ -28,6 +28,8 @@ The persona selection happens server-side at session start — the user doesn't 
 During a voice session, the coach can:
 - **Mark a task complete** — "mark my run as done" → task checks off in the UI immediately
 - **Add a task** — "add: finish the report by 4pm" → appears in the list during the call
+- **Edit a task** — "update gym to 30 min strength training" → task text rewrites live
+- **Delete a task** — "remove the meeting task" → coach confirms by name then deletes
 
 These are ElevenLabs **client tools** — the agent calls a function in the browser, which hits the API and updates state in real time.
 
@@ -61,12 +63,13 @@ After each voice session, ElevenLabs fires a webhook to the API which stores the
 
 **2. Start a morning check-in**
 - Tap **Start My Day**
-- Speak a vague task ("add workout") — the coach should push back and ask for specifics
-- Speak a specific task ("add: run 5km before 9am") — coach adds it, task appears in the list
+- Speak a vague task ("add workout") — the coach asks a domain-specific follow-up ("Run or strength? For how long?")
+- Speak a specific task ("add: run 5km before 9am") — coach adds it, task appears in the list instantly
 
-**3. Mark a task complete via voice**
-- Say "mark [task name] as done"
-- Watch the checkbox tick in real-time during the conversation
+**3. Live task actions via voice**
+- Say "mark [task name] as done" → checkbox ticks in real time
+- Say "remove [task]" → coach confirms by name, then deletes it
+- Say "update gym to 30 min strength training" → task text rewrites live
 
 **4. Show task vagueness detection (manual)**
 - Type a vague task like "study" in the input box
@@ -76,6 +79,10 @@ After each voice session, ElevenLabs fires a webhook to the API which stores the
 - Tap on any day to expand its task list
 - Show how the categories and completion states are preserved
 
+**6. Show the Guide tab**
+- Walk through the 4 coaches and their trigger conditions
+- Point out the voice command reference
+
 ---
 
 ## ElevenLabs Integration Points
@@ -83,7 +90,7 @@ After each voice session, ElevenLabs fires a webhook to the API which stores the
 | Feature | Where used |
 |---|---|
 | Conversational AI | Live coaching sessions (`Start My Day`, `End My Day`, `Review Tasks`) |
-| Client Tools | `complete_task` and `add_task` fire during conversation |
+| Client Tools | `complete_task`, `add_task`, `update_task`, `delete_task` fire during conversation |
 | Post-call Webhook | Transcript stored after session ends |
 | TTS (text-to-speech) | Spoken coaching tip on vague task detection |
 

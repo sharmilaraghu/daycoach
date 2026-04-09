@@ -243,28 +243,30 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground">
-      <main className="flex-1 max-w-md mx-auto w-full pb-24 pt-8 px-5">{children}</main>
-      <nav className="fixed bottom-0 w-full max-w-md left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-xl border-t border-border z-40">
-        <div className="flex justify-around items-center h-16">
+      <nav className="sticky top-0 z-40 w-full bg-background/80 backdrop-blur-xl border-b border-border">
+        <div className="max-w-4xl mx-auto flex items-center h-14 px-6 gap-1">
           {[
             { href: "/", icon: HomeIcon, label: "Today", id: "home" },
             { href: "/history", icon: HistoryIcon, label: "History", id: "history" },
-            { href: "/voices", icon: Mic2, label: "Coaches", id: "voices" },
+            { href: "/voices", icon: Mic2, label: "Guide", id: "voices" },
           ].map(({ href, icon: Icon, label, id }) => (
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${
-                location === href ? "text-primary" : "text-muted-foreground hover:text-foreground transition-colors"
-              }`}
               data-testid={`nav-${id}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                location === href
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
             >
-              <Icon size={20} />
-              <span className="text-[10px] font-medium">{label}</span>
+              <Icon size={16} />
+              {label}
             </Link>
           ))}
         </div>
       </nav>
+      <main className="flex-1 max-w-4xl mx-auto w-full py-8 px-6">{children}</main>
     </div>
   );
 }
@@ -339,6 +341,42 @@ function Home() {
                 resolve("Task added successfully.");
               },
               onError: () => resolve("Could not add task — please try manually."),
+            },
+          );
+        });
+      },
+      delete_task: async (params: { task_id: number }) => {
+        const taskId = Number(params.task_id);
+        const task = tasks?.find((t) => t.id === taskId);
+        return new Promise<string>((resolve) => {
+          deleteTask.mutate(
+            { id: taskId },
+            {
+              onSuccess: () => {
+                invalidateTasks();
+                toast({
+                  title: "Task removed",
+                  description: task ? `"${task.text}" deleted.` : "Task deleted.",
+                });
+                resolve("Task deleted.");
+              },
+              onError: () => resolve("Could not delete task — please try manually."),
+            },
+          );
+        });
+      },
+      update_task: async (params: { task_id: number; text: string }) => {
+        const taskId = Number(params.task_id);
+        return new Promise<string>((resolve) => {
+          updateTask.mutate(
+            { id: taskId, data: { text: params.text } },
+            {
+              onSuccess: () => {
+                invalidateTasks();
+                toast({ title: "Task updated", description: `Updated to "${params.text}".` });
+                resolve("Task updated.");
+              },
+              onError: () => resolve("Could not update task — please try manually."),
             },
           );
         });
@@ -596,6 +634,9 @@ function Home() {
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">Your coach today</p>
               <p className="text-lg font-semibold">{patterns?.activeVoicePersonaLabel ?? "—"}</p>
+              {patterns?.activeVoicePersonaReason && (
+                <p className="text-xs text-muted-foreground mt-0.5">{(patterns as { activeVoicePersonaReason?: string }).activeVoicePersonaReason}</p>
+              )}
             </div>
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <Mic2 className="w-5 h-5 text-primary" />
@@ -637,50 +678,34 @@ function Home() {
                 )}
               </Button>
             )}
-
-            <p className="text-xs text-center text-muted-foreground">
-              {isEvening
-                ? "Evening — review your day with your coach"
-                : "Morning — set your intentions with your coach"}
-            </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Category Streaks */}
+      {/* Category Streaks — compact row */}
       {patterns?.categoryStreaks && patterns.categoryStreaks.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Category Streaks</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {patterns.categoryStreaks.map((cs) => {
-              const cfg = CATEGORY_CONFIG[cs.category] ?? {
-                icon: Sparkles,
-                color: "text-primary",
-                bgColor: "bg-primary/10",
-                borderColor: "border-primary/20",
-              };
-              const Icon = cfg.icon;
-              return (
-                <div
-                  key={cs.category}
-                  className={`p-3 rounded-xl border ${cfg.bgColor} ${cfg.borderColor} space-y-2`}
-                  data-testid={`category-streak-${cs.category}`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Icon className={`w-3.5 h-3.5 ${cfg.color}`} />
-                    <span className={`text-xs font-semibold ${cfg.color}`}>{cs.label}</span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold leading-none">{cs.streak}</span>
-                    <span className="text-xs text-muted-foreground">day{cs.streak !== 1 ? "s" : ""}</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground leading-tight">{cs.insight}</p>
-                </div>
-              );
-            })}
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {patterns.categoryStreaks.map((cs) => {
+            const cfg = CATEGORY_CONFIG[cs.category] ?? {
+              icon: Sparkles,
+              color: "text-primary",
+              bgColor: "bg-primary/10",
+              borderColor: "border-primary/20",
+            };
+            const Icon = cfg.icon;
+            return (
+              <div
+                key={cs.category}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium ${cfg.bgColor} ${cfg.borderColor}`}
+                data-testid={`category-streak-${cs.category}`}
+                title={cs.insight}
+              >
+                <Icon className={`w-3 h-3 ${cfg.color}`} />
+                <span className={cfg.color}>{cs.label}</span>
+                <span className="text-muted-foreground font-normal">{cs.streak}d</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -755,81 +780,87 @@ function Home() {
             </div>
           ) : (
             <AnimatePresence>
-              {tasks?.map((task) => (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border transition-colors ${
-                    task.completed
-                      ? "bg-muted/20 border-border/30 opacity-50"
-                      : "bg-card border-border"
-                  }`}
-                  data-testid={`task-item-${task.id}`}
-                >
-                  <button
-                    onClick={() => handleToggleTask(task.id, task.completed)}
-                    className="flex items-center gap-3 flex-1 text-left min-w-0"
-                    data-testid={`button-toggle-task-${task.id}`}
+              {tasks?.map((task) => {
+                const taskCategory = ("category" in task && task.category) ? task.category as string : null;
+                const catCfg = taskCategory ? (CATEGORY_CONFIG[taskCategory] ?? null) : null;
+                return (
+                  <motion.div
+                    key={task.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                    className={`group flex items-center gap-3 p-3.5 rounded-xl border transition-colors ${
+                      task.completed
+                        ? "bg-muted/20 border-border/30 opacity-50"
+                        : "bg-card border-border"
+                    }`}
+                    data-testid={`task-item-${task.id}`}
                   >
-                    <div
-                      className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-colors ${
-                        task.completed
-                          ? "bg-primary text-primary-foreground"
-                          : "border-2 border-muted-foreground/30"
-                      }`}
+                    {/* Category dot */}
+                    {catCfg && (
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${catCfg.color.replace("text-", "bg-").replace("/40","")}`} title={taskCategory ?? ""} />
+                    )}
+
+                    <button
+                      onClick={() => handleToggleTask(task.id, task.completed)}
+                      className="flex items-center gap-3 flex-1 text-left min-w-0"
+                      data-testid={`button-toggle-task-${task.id}`}
                     >
-                      {task.completed && <Check className="w-3 h-3" strokeWidth={3} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {editingTaskId === task.id ? (
-                        <input
-                          autoFocus
-                          className="text-sm bg-transparent border-b border-primary outline-none w-full"
-                          value={editingText}
-                          onChange={(e) => setEditingText(e.target.value)}
-                          onBlur={() => handleEditSave(task.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleEditSave(task.id);
-                            if (e.key === "Escape") setEditingTaskId(null);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <span className={`text-sm truncate block ${task.completed ? "line-through text-muted-foreground" : ""}`}>
-                          {task.text}
-                        </span>
-                      )}
-                      {"category" in task && task.category && (
-                        <span className="text-[10px] text-muted-foreground/70 font-medium uppercase tracking-wide">
-                          {task.category as string}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                  {!task.completed && editingTaskId !== task.id && (
+                      <div
+                        className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-colors ${
+                          task.completed
+                            ? "bg-primary text-primary-foreground"
+                            : "border-2 border-muted-foreground/30"
+                        }`}
+                      >
+                        {task.completed && <Check className="w-3 h-3" strokeWidth={3} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {editingTaskId === task.id ? (
+                          <input
+                            autoFocus
+                            className="text-sm bg-transparent border-b border-primary outline-none w-full"
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            onBlur={() => handleEditSave(task.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleEditSave(task.id);
+                              if (e.key === "Escape") setEditingTaskId(null);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span className={`text-sm truncate block ${task.completed ? "line-through text-muted-foreground" : ""}`}>
+                            {task.text}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Hover-only actions */}
+                    {!task.completed && editingTaskId !== task.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-7 h-7 text-muted-foreground hover:text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => { e.stopPropagation(); setEditingTaskId(task.id); setEditingText(task.text); }}
+                        data-testid={`button-edit-task-${task.id}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-7 h-7 text-muted-foreground hover:text-primary shrink-0"
-                      onClick={(e) => { e.stopPropagation(); setEditingTaskId(task.id); setEditingText(task.text); }}
-                      data-testid={`button-edit-task-${task.id}`}
+                      className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDeleteTask(task.id)}
+                      data-testid={`button-delete-task-${task.id}`}
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => handleDeleteTask(task.id)}
-                    data-testid={`button-delete-task-${task.id}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
           )}
         </div>
@@ -957,14 +988,22 @@ function History() {
   );
 }
 
-// ─── Voices ───────────────────────────────────────────────────────────────────
+// ─── Guide ────────────────────────────────────────────────────────────────────
 
-const PERSONA_COLORS: Record<string, string> = {
-  sunny: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-  coach: "text-blue-400 bg-blue-400/10 border-blue-400/20",
-  commander: "text-red-400 bg-red-400/10 border-red-400/20",
-  champion: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
+const PERSONA_META: Record<string, { color: string; trigger: string; tone: string }> = {
+  sunny:     { color: "text-amber-400 bg-amber-400/10 border-amber-400/20",   trigger: "Streak of 2+ days",        tone: "Warm & encouraging" },
+  coach:     { color: "text-blue-400 bg-blue-400/10 border-blue-400/20",      trigger: "Missed 1–2 days recently", tone: "Calm & direct" },
+  commander: { color: "text-red-400 bg-red-400/10 border-red-400/20",         trigger: "Missed 3+ days",           tone: "Strict & no-excuses" },
+  champion:  { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", trigger: "Completed every task today", tone: "Celebratory & hype" },
 };
+
+const VOICE_COMMANDS = [
+  { cmd: '"Mark [task] as done"',            desc: "Checks off a task in real time" },
+  { cmd: '"Add: run 5km before 8am"',        desc: "Adds a specific task to today's list" },
+  { cmd: '"Remove [task]"',                  desc: "Deletes a task after confirmation" },
+  { cmd: '"Update [task] to [new text]"',    desc: "Rewrites a task to be more specific" },
+  { cmd: '"What is left for today?"',         desc: "Coach summarises your pending tasks" },
+];
 
 function Voices() {
   const { data: voices, isLoading } = useGetVoicePersonas();
@@ -973,38 +1012,89 @@ function Voices() {
     return (
       <div className="space-y-5">
         <Skeleton className="h-8 w-1/3" />
-        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
+        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
       </div>
     );
   }
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-10">
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight">The Coaches</h1>
-        <p className="text-muted-foreground text-sm mt-1">Your coach shifts based on consistency.</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Guide</h1>
+        <p className="text-muted-foreground text-sm mt-1">How DayCoach works and what to say.</p>
       </header>
-      <div className="space-y-3">
-        {voices?.map((voice) => {
-          const color = PERSONA_COLORS[voice.key] ?? "text-primary bg-primary/10 border-primary/20";
-          return (
-            <Card key={voice.key} className="border-border bg-card" data-testid={`voice-card-${voice.key}`}>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full border flex items-center justify-center ${color}`}>
-                    <User className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-sm">{voice.label}</h3>
-                    <p className={`text-xs ${color.split(" ")[0]}`}>{voice.condition}</p>
-                  </div>
+
+      {/* How it works */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">How it works</h2>
+        <div className="space-y-2">
+          {[
+            { step: "1", text: "Tap Start My Day to open a live voice session with your coach. Speak naturally — they can hear you." },
+            { step: "2", text: "Your coach adds, edits, or checks off tasks during the conversation. Changes appear in your list in real time." },
+            { step: "3", text: "Tap End My Day in the evening to reflect on what you completed. Your coach adapts to how the day went." },
+          ].map(({ step, text }) => (
+            <div key={step} className="flex gap-3 p-3.5 rounded-xl bg-card border border-border">
+              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{step}</span>
+              <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Coach personas */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Your coaches</h2>
+        <p className="text-xs text-muted-foreground">DayCoach selects your coach automatically — you don't pick one.</p>
+        <div className="space-y-2">
+          {voices?.map((voice) => {
+            const meta = PERSONA_META[voice.key] ?? { color: "text-primary bg-primary/10 border-primary/20", trigger: "", tone: "" };
+            return (
+              <div key={voice.key} className="flex items-center gap-4 p-3.5 rounded-xl bg-card border border-border" data-testid={`voice-card-${voice.key}`}>
+                <div className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 ${meta.color}`}>
+                  <Mic2 className="w-4 h-4" />
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed pl-12">{voice.description}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{voice.label}</span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${meta.color}`}>{meta.tone}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">Triggered when: {meta.trigger}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Voice commands */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Voice commands</h2>
+        <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+          {VOICE_COMMANDS.map(({ cmd, desc }) => (
+            <div key={cmd} className="flex items-start gap-3 px-4 py-3 bg-card">
+              <code className="text-xs text-primary font-mono bg-primary/8 px-2 py-0.5 rounded shrink-0">{cmd}</code>
+              <span className="text-xs text-muted-foreground">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Task categories</h2>
+        <p className="text-xs text-muted-foreground">Tasks are automatically tagged based on their content.</p>
+        <div className="grid grid-cols-2 gap-2">
+          {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => {
+            const Icon = cfg.icon;
+            return (
+              <div key={key} className={`flex items-center gap-2 p-3 rounded-xl border ${cfg.bgColor} ${cfg.borderColor}`}>
+                <Icon className={`w-4 h-4 ${cfg.color}`} />
+                <span className={`text-xs font-medium capitalize ${cfg.color}`}>{key}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

@@ -65,38 +65,43 @@ export interface PatternData {
 
 /**
  * Select which voice persona to use based on user patterns.
- * Priority: champion > sunny > coach > commander
+ *
+ * Evening sessions: driven by today's completion rate — the persona reflects
+ * how the user actually performed today.
+ *
+ * Morning sessions: driven by recent pattern (streak / missed days) — the
+ * persona reflects how the user has been showing up lately.
  */
 export function selectVoicePersona(data: PatternData): { key: string; reason: string } {
   const { missedDaysLast7, currentStreak, todayCompleted, todayTotal, isEvening } = data;
 
-  // Champion: evening check-in AND completed all tasks (at least 1)
-  if (isEvening && todayTotal > 0 && todayCompleted === todayTotal) {
-    return { key: "champion", reason: "You completed every task today!" };
+  if (isEvening) {
+    // Champion: completed every task today
+    if (todayTotal > 0 && todayCompleted === todayTotal) {
+      return { key: "champion", reason: "You completed every task today!" };
+    }
+    // Sunny: no tasks set, or completed 70%+
+    if (todayTotal === 0 || todayCompleted / todayTotal >= 0.7) {
+      return { key: "sunny", reason: "Good effort today — let's reflect." };
+    }
+    // Coach: completed 40–69%
+    if (todayCompleted / todayTotal >= 0.4) {
+      return { key: "coach", reason: "Solid progress — let's talk about the rest." };
+    }
+    // Commander: completed less than 40%
+    return { key: "commander", reason: "Today fell short — let's debrief honestly." };
   }
 
-  // Sunny: on a streak of 2+ days and not too many missed days
+  // Morning: streak / missed days pattern
   if (currentStreak >= 2 && missedDaysLast7 <= 1) {
     return { key: "sunny", reason: `You're on a ${currentStreak}-day streak!` };
   }
-
-  // Commander: missed 3+ days in last 7
   if (missedDaysLast7 >= 3) {
-    return {
-      key: "commander",
-      reason: `You've missed ${missedDaysLast7} days this week — accountability time.`,
-    };
+    return { key: "commander", reason: `You've missed ${missedDaysLast7} days this week — accountability time.` };
   }
-
-  // Coach: missed 1-2 days
   if (missedDaysLast7 >= 1) {
-    return {
-      key: "coach",
-      reason: `You missed ${missedDaysLast7} day${missedDaysLast7 > 1 ? "s" : ""} recently — let's refocus.`,
-    };
+    return { key: "coach", reason: `You missed ${missedDaysLast7} day${missedDaysLast7 > 1 ? "s" : ""} recently — let's refocus.` };
   }
-
-  // Default to sunny (new user or perfect record)
   return { key: "sunny", reason: "Welcome to DayCoach — let's build great habits!" };
 }
 
