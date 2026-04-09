@@ -64,6 +64,7 @@ Thumbs.db
 .agents/
 .local-tool/
 AGENTS.md
+LOCAL_TOOL.md
 
 # Images folder (screenshots, not source code)
 images/
