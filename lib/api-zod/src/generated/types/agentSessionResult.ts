@@ -9,8 +9,6 @@
 export interface AgentSessionResult {
   /** Signed WSS URL for ElevenLabs Conversational AI */
   signedUrl?: string | null;
-  /** ElevenLabs agent ID */
-  agentId?: string | null;
   voicePersona: string;
   voicePersonaLabel: string;
   /** Whether the agent conversation is available */

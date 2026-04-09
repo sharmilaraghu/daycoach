@@ -57,14 +57,9 @@ Thumbs.db
 .replit
 .replitignore
 
-# Local tool permissions (may contain API keys)
-.local-tool/settings.local.json
-
 # AI agent config (not needed to run the project)
 .agents/
-.local-tool/
 AGENTS.md
-LOCAL_TOOL.md
 
 # Images folder (screenshots, not source code)
 images/

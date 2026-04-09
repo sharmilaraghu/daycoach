@@ -639,10 +639,6 @@ components:
           type: string
           description: Signed WSS URL for ElevenLabs Conversational AI
           nullable: true
-        agentId:
-          type: string
-          description: ElevenLabs agent ID
-          nullable: true
         voicePersona:
           type: string
         voicePersonaLabel:

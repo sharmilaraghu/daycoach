@@ -136,7 +136,8 @@ pnpm --filter @workspace/scripts run seed-demo
 
 1. Import this repo in Replit (Create Repl → Import from GitHub)
 2. Add secrets in Replit: `DATABASE_URL`, `ELEVENLABS_API_KEY`, `SESSION_SECRET`
-3. The 4 agent IDs are in `.replit` — no need to re-add them
+3. Add the 4 agent IDs as private environment variables or Replit Secrets:
+   `ELEVENLABS_AGENT_SUNNY`, `ELEVENLABS_AGENT_COACH`, `ELEVENLABS_AGENT_COMMANDER`, `ELEVENLABS_AGENT_CHAMPION`
 4. Hit **Deploy** — Replit runs the build and starts the server automatically
 
 ---

@@ -278,7 +278,6 @@ export const GetAgentSessionResponse = zod.object({
     .string()
     .nullish()
     .describe("Signed WSS URL for ElevenLabs Conversational AI"),
-  agentId: zod.string().nullish().describe("ElevenLabs agent ID"),
   voicePersona: zod.string(),
   voicePersonaLabel: zod.string(),
   available: zod

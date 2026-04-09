@@ -263,12 +263,12 @@ router.post("/agent/session", async (req, res) => {
     logger.warn({ personaKey }, "No agent ID configured for persona");
     res.json({
       signedUrl: null,
-      agentId: null,
       systemPrompt: null,
       firstMessage: null,
       voicePersona: personaKey,
       voicePersonaLabel: activeVoicePersonaLabel,
       available: false,
+      reason: "not_configured",
     });
     return;
   }
@@ -303,12 +303,21 @@ router.post("/agent/session", async (req, res) => {
   try {
     signedUrl = await getConvAiSignedUrl(agentId);
   } catch (err) {
-    logger.warn({ err, agentId }, "Failed to get signed URL — falling back to public agentId");
+    logger.warn({ err, personaKey }, "Failed to get signed URL");
+    res.json({
+      signedUrl: null,
+      systemPrompt,
+      firstMessage,
+      voicePersona: personaKey,
+      voicePersonaLabel: activeVoicePersonaLabel,
+      available: false,
+      reason: "signed_url_unavailable",
+    });
+    return;
   }
 
   res.json({
     signedUrl,
-    agentId,
     systemPrompt,
     firstMessage,
     voicePersona: personaKey,

@@ -530,7 +530,7 @@ function Home() {
       },
       {
         onSuccess: async (session) => {
-          if (!session.available || !session.agentId) {
+          if (!session.available || !session.signedUrl) {
             toast({
               title: "Coach unavailable",
               description: "Could not connect to voice coach right now.",
@@ -553,9 +553,10 @@ function Home() {
                 ...(session.firstMessage ? { firstMessage: session.firstMessage } : {}),
               },
             };
-            const sessionOptions: SessionConfig = session.signedUrl
-              ? { signedUrl: session.signedUrl, overrides: agentOverrides }
-              : { agentId: session.agentId!, connectionType: "websocket", overrides: agentOverrides };
+            const sessionOptions: SessionConfig = {
+              signedUrl: session.signedUrl,
+              overrides: agentOverrides,
+            };
             await conversation.startSession(sessionOptions);
           } catch (err) {
             console.error(err);
