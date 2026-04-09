@@ -39,7 +39,7 @@ if (process.env.NODE_ENV === "production") {
   const frontendDist = path.resolve(__dirname, "../../daycoach/dist/public");
   app.use(express.static(frontendDist));
   // Catch-all: return index.html for any non-API route (SPA routing)
-  app.get("*", (_req, res) => {
+  app.get("*splat", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 }
