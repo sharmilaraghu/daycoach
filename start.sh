@@ -18,12 +18,12 @@ PORT=8080 pnpm --filter @workspace/api-server run dev &
 API_PID=$!
 
 echo "Starting frontend..."
-PORT=5173 BASE_PATH=/ pnpm --filter @workspace/daycoach run dev &
+PORT=5000 BASE_PATH=/ pnpm --filter @workspace/daycoach run dev &
 FE_PID=$!
 
 echo ""
 echo "API:      http://localhost:8080"
-echo "Frontend: http://localhost:5173"
+echo "Frontend: http://localhost:5000"
 echo ""
 echo "Press Ctrl+C to stop both."
 
