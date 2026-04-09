@@ -11,6 +11,7 @@ import {
   Loader2,
   Check,
   Trash2,
+  Pencil,
   Plus,
   Sparkles,
   PhoneOff,
@@ -42,6 +43,8 @@ import {
   useGetAgentSession,
   useLogConversationEnd,
   useToggleDemoMode,
+  useUpdateTask,
+  useCloseTodaySummary,
   getGetTodayTasksQueryKey,
   getGetPatternsQueryKey,
   getGetHistoryQueryKey,
@@ -275,9 +278,11 @@ function Home() {
   const createTask = useCreateTask();
   const completeTask = useCompleteTask();
   const deleteTask = useDeleteTask();
+  const updateTask = useUpdateTask();
   const validateTask = useValidateTask();
   const getAgentSession = useGetAgentSession();
   const logConversationEnd = useLogConversationEnd();
+  const closeTodaySummary = useCloseTodaySummary();
   const toggleDemoMode = useToggleDemoMode();
 
   const { toast } = useToast();
@@ -290,6 +295,8 @@ function Home() {
 
   const [convActive, setConvActive] = useState(false);
   const [convMode, setConvMode] = useState<"checkin" | "review">("checkin");
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState("");
   const convStartedAt = useRef<Date | null>(null);
   const convPersonaRef = useRef<{ persona: string; personaLabel: string; mode: string } | null>(null);
 
@@ -354,6 +361,16 @@ function Home() {
             mode: persona.mode as "checkin" | "review",
           },
         });
+        if (persona.mode === "review") {
+          const total = patterns?.todayTotal ?? 0;
+          const completed = patterns?.todayCompleted ?? 0;
+          const rate = total > 0 ? completed / total : 0;
+          const overallStatus = rate >= 0.8 ? "great" : rate >= 0.4 ? "partial" : "missed";
+          const summaryText = `Completed ${completed} of ${total} tasks today (${Math.round(rate * 100)}%).`;
+          closeTodaySummary.mutate({
+            data: { summaryText, overallStatus, closureSource: "voice_agent" },
+          });
+        }
       }
       convStartedAt.current = null;
       convPersonaRef.current = null;
@@ -415,6 +432,17 @@ function Home() {
     });
   };
 
+  const handleEditSave = (id: number) => {
+    const trimmed = editingText.trim();
+    if (trimmed && trimmed !== tasks?.find((t) => t.id === id)?.text) {
+      updateTask.mutate({ id, data: { text: trimmed } }, {
+        onSuccess: () => invalidateTasks(),
+        onError: () => toast({ title: "Failed to update task", variant: "destructive" }),
+      });
+    }
+    setEditingTaskId(null);
+  };
+
   const now = new Date();
   const isEvening = isAfter(now, setMinutes(setHours(now, 17), 0));
 
@@ -427,6 +455,7 @@ function Home() {
   };
 
   async function startConversation(mode: "checkin" | "review") {
+    if (conversation.status === "connecting" || conversation.status === "connected") return;
     if (!patterns) return;
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -655,28 +684,6 @@ function Home() {
         </div>
       )}
 
-      {/* Demo Mode Toggle */}
-      <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border">
-        <div className="flex items-center gap-2">
-          <FlaskConical className="w-4 h-4 text-muted-foreground" />
-          <div>
-            <p className="text-xs font-medium">Demo Mode</p>
-            <p className="text-[10px] text-muted-foreground">
-              {patterns?.demoMode ? "Commander persona active" : "Simulates missed-days state"}
-            </p>
-          </div>
-        </div>
-        <Button
-          size="sm"
-          variant={patterns?.demoMode ? "default" : "outline"}
-          className="h-7 text-xs rounded-lg px-3"
-          onClick={handleDemoToggle}
-          disabled={toggleDemoMode.isPending}
-          data-testid="button-demo-toggle"
-        >
-          {patterns?.demoMode ? "On" : "Off"}
-        </Button>
-      </div>
 
       {/* Tasks */}
       <div className="space-y-3">
@@ -776,9 +783,24 @@ function Home() {
                       {task.completed && <Check className="w-3 h-3" strokeWidth={3} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className={`text-sm truncate block ${task.completed ? "line-through text-muted-foreground" : ""}`}>
-                        {task.text}
-                      </span>
+                      {editingTaskId === task.id ? (
+                        <input
+                          autoFocus
+                          className="text-sm bg-transparent border-b border-primary outline-none w-full"
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          onBlur={() => handleEditSave(task.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleEditSave(task.id);
+                            if (e.key === "Escape") setEditingTaskId(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span className={`text-sm truncate block ${task.completed ? "line-through text-muted-foreground" : ""}`}>
+                          {task.text}
+                        </span>
+                      )}
                       {"category" in task && task.category && (
                         <span className="text-[10px] text-muted-foreground/70 font-medium uppercase tracking-wide">
                           {task.category as string}
@@ -786,6 +808,17 @@ function Home() {
                       )}
                     </div>
                   </button>
+                  {!task.completed && editingTaskId !== task.id && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-7 h-7 text-muted-foreground hover:text-primary shrink-0"
+                      onClick={(e) => { e.stopPropagation(); setEditingTaskId(task.id); setEditingText(task.text); }}
+                      data-testid={`button-edit-task-${task.id}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -807,8 +840,19 @@ function Home() {
 
 // ─── History ──────────────────────────────────────────────────────────────────
 
+type HistoryDay = {
+  date: string;
+  totalTasks: number;
+  completedTasks: number;
+  completionRate: number;
+  voicePersonaUsed: string;
+  hadCheckin: boolean;
+  tasks?: { id: number; text: string; completed: boolean; category: string }[];
+};
+
 function History() {
   const { data: history, isLoading } = useGetHistory();
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -819,6 +863,8 @@ function History() {
     );
   }
 
+  const days = (history ?? []) as HistoryDay[];
+
   return (
     <div className="space-y-7">
       <header>
@@ -826,46 +872,84 @@ function History() {
         <p className="text-muted-foreground text-sm mt-1">Your last 14 days.</p>
       </header>
       <div className="space-y-2">
-        {history?.map((day) => {
+        {days.map((day) => {
           const date = parseISO(day.date);
           const isTodayDate = isToday(date);
           const percent = day.totalTasks > 0 ? day.completedTasks / day.totalTasks : 0;
+          const isOpen = expanded === day.date;
+          const hasTasks = (day.tasks?.length ?? 0) > 0;
           return (
             <div
               key={day.date}
-              className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border"
+              className="rounded-xl bg-card border border-border overflow-hidden"
               data-testid={`history-item-${day.date}`}
             >
-              <div className="flex flex-col items-center justify-center w-11 h-11 rounded-lg bg-muted/40 shrink-0">
-                <span className="text-[9px] font-medium text-muted-foreground uppercase leading-none">{format(date, "MMM")}</span>
-                <span className="text-base font-bold leading-tight">{format(date, "d")}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium flex items-center gap-1.5">
-                  {isTodayDate ? "Today" : format(date, "EEEE")}
-                  {day.hadCheckin && (
-                    <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                      <Mic2 className="w-2.5 h-2.5 mr-0.5" />
-                      Checked in
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {day.totalTasks === 0 ? "No commitments" : `${day.completedTasks} of ${day.totalTasks} done`}
-                </p>
-              </div>
-              {day.totalTasks > 0 && (
-                <div
-                  className="w-10 h-10 rounded-full border-[3px] flex items-center justify-center text-[10px] font-semibold shrink-0"
-                  style={{ borderColor: `color-mix(in srgb, hsl(var(--primary)) ${percent * 100}%, hsl(var(--border)))` }}
-                >
-                  {Math.round(percent * 100)}%
+              <button
+                className="w-full flex items-center gap-4 p-4 text-left"
+                onClick={() => hasTasks && setExpanded(isOpen ? null : day.date)}
+                disabled={!hasTasks}
+              >
+                <div className="flex flex-col items-center justify-center w-11 h-11 rounded-lg bg-muted/40 shrink-0">
+                  <span className="text-[9px] font-medium text-muted-foreground uppercase leading-none">{format(date, "MMM")}</span>
+                  <span className="text-base font-bold leading-tight">{format(date, "d")}</span>
                 </div>
-              )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    {isTodayDate ? "Today" : format(date, "EEEE, MMM d")}
+                    {day.hadCheckin && (
+                      <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                        <Mic2 className="w-2.5 h-2.5 mr-0.5" />
+                        Coached
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {day.totalTasks === 0 ? "No commitments" : `${day.completedTasks} of ${day.totalTasks} done`}
+                  </p>
+                </div>
+                {day.totalTasks > 0 && (
+                  <div
+                    className="w-10 h-10 rounded-full border-[3px] flex items-center justify-center text-[10px] font-semibold shrink-0"
+                    style={{ borderColor: `color-mix(in srgb, hsl(var(--primary)) ${percent * 100}%, hsl(var(--border)))` }}
+                  >
+                    {Math.round(percent * 100)}%
+                  </div>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isOpen && day.tasks && day.tasks.length > 0 && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-3 pt-0 space-y-1.5 border-t border-border/40">
+                      {day.tasks.map((task) => {
+                        const catCfg = CATEGORY_CONFIG[task.category] ?? {
+                          icon: Sparkles, color: "text-primary", bgColor: "bg-primary/10", borderColor: "border-primary/20",
+                        };
+                        const CatIcon = catCfg.icon;
+                        return (
+                          <div key={task.id} className="flex items-center gap-2 py-1">
+                            <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${task.completed ? "bg-primary text-primary-foreground" : "border border-muted-foreground/30"}`}>
+                              {task.completed && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+                            </div>
+                            <span className={`text-xs flex-1 ${task.completed ? "line-through text-muted-foreground" : ""}`}>{task.text}</span>
+                            <CatIcon className={`w-3 h-3 shrink-0 ${catCfg.color} opacity-60`} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}
-        {(!history || history.length === 0) && (
+        {days.length === 0 && (
           <div className="text-center p-10 text-muted-foreground text-sm">No history yet.</div>
         )}
       </div>

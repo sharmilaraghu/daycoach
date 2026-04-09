@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { tasksTable, dailySummariesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { PERSONA_DEFINITIONS, selectVoicePersona } from "../lib/voicePersonaSelector";
 
 const router = Router();
@@ -196,28 +196,33 @@ router.get("/patterns", async (req, res) => {
 router.get("/history", async (req, res) => {
   const last14Dates = Array.from({ length: 14 }, (_, i) => dateString(i));
 
-  const results = [];
-  for (const date of last14Dates) {
-    const dayTasks = await db.select().from(tasksTable).where(eq(tasksTable.date, date));
+  const [allTasks, allSummaries] = await Promise.all([
+    db.select().from(tasksTable).where(inArray(tasksTable.date, last14Dates)),
+    db.select().from(dailySummariesTable).where(inArray(dailySummariesTable.date, last14Dates)),
+  ]);
+
+  const tasksByDate = new Map<string, typeof allTasks>();
+  for (const task of allTasks) {
+    if (!tasksByDate.has(task.date)) tasksByDate.set(task.date, []);
+    tasksByDate.get(task.date)!.push(task);
+  }
+  const summaryByDate = new Map(allSummaries.map((s) => [s.date, s]));
+
+  const results = last14Dates.map((date) => {
+    const dayTasks = tasksByDate.get(date) ?? [];
     const completed = dayTasks.filter((t) => t.completed).length;
     const total = dayTasks.length;
-    const completionRate = total > 0 ? completed / total : 0;
-
-    const summaries = await db
-      .select()
-      .from(dailySummariesTable)
-      .where(eq(dailySummariesTable.date, date))
-      .limit(1);
-
-    results.push({
+    const summary = summaryByDate.get(date);
+    return {
       date,
       totalTasks: total,
       completedTasks: completed,
-      completionRate,
-      voicePersonaUsed: summaries[0]?.voicePersonaUsed ?? "sunny",
-      hadCheckin: summaries[0]?.hadCheckin ?? false,
-    });
-  }
+      completionRate: total > 0 ? completed / total : 0,
+      voicePersonaUsed: summary?.voicePersonaUsed ?? "sunny",
+      hadCheckin: summary?.hadCheckin ?? false,
+      tasks: dayTasks.map((t) => ({ id: t.id, text: t.text, completed: t.completed, category: t.category })),
+    };
+  });
 
   res.json(results);
 });

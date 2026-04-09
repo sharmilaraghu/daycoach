@@ -7,7 +7,7 @@
  */
 
 /**
- * Session mode - checkin (default) or review
+ * Session mode for the voice workflow
  */
 export type AgentSessionBodyMode =
   (typeof AgentSessionBodyMode)[keyof typeof AgentSessionBodyMode];

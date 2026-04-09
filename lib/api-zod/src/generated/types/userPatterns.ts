@@ -5,7 +5,6 @@
  * DayCoach API specification
  * OpenAPI spec version: 0.1.0
  */
-
 import type { CategoryStreak } from "./categoryStreak";
 
 export interface UserPatterns {

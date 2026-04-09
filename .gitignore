@@ -56,3 +56,17 @@ Thumbs.db
 # Replit config (contains agent IDs / env vars)
 .replit
 .replitignore
+
+# Local tool permissions (may contain API keys)
+.local-tool/settings.local.json
+
+# AI agent config (not needed to run the project)
+.agents/
+.local-tool/
+AGENTS.md
+
+# Images folder (screenshots, not source code)
+images/
+
+# Replit-specific docs
+documentation/replit.md

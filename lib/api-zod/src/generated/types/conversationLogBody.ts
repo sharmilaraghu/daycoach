@@ -11,6 +11,7 @@ export interface ConversationLogBody {
   voicePersonaLabel: string;
   /** ISO timestamp when conversation started */
   startedAt: string;
+  conversationId?: string | null;
   durationSeconds?: number | null;
   disconnectReason?: string | null;
   /** Session mode (checkin or review) */

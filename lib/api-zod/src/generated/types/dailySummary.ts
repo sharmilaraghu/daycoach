@@ -13,4 +13,8 @@ export interface DailySummary {
   completionRate: number;
   voicePersonaUsed: string;
   hadCheckin: boolean;
+  summaryText?: string | null;
+  overallStatus?: string | null;
+  closedAt?: string | null;
+  closureSource?: string | null;
 }

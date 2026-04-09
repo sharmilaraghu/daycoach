@@ -51,6 +51,10 @@ export const dailySummariesTable = pgTable("daily_summaries", {
   completionRate: real("completion_rate").notNull().default(0),
   voicePersonaUsed: text("voice_persona_used").notNull().default("sunny"),
   hadCheckin: boolean("had_checkin").notNull().default(false),
+  summaryText: text("summary_text"),
+  overallStatus: text("overall_status"),
+  closedAt: timestamp("closed_at"),
+  closureSource: text("closure_source"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
@@ -60,6 +64,7 @@ export type DailySummary = typeof dailySummariesTable.$inferSelect;
 
 export const conversationLogsTable = pgTable("conversation_logs", {
   id: serial("id").primaryKey(),
+  conversationId: text("conversation_id"),
   voicePersona: text("voice_persona").notNull(),
   voicePersonaLabel: text("voice_persona_label").notNull(),
   startedAt: timestamp("started_at").notNull(),

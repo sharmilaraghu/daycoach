@@ -20,17 +20,6 @@ export interface Task {
   createdAt: string;
 }
 
-export interface CategoryStreak {
-  /** One of health, work, learning, mindset */
-  category: string;
-  /** Human-friendly category name */
-  label: string;
-  /** Current consecutive days with at least one completed task in this category */
-  streak: number;
-  /** A short pattern insight for this category */
-  insight: string;
-}
-
 export interface CreateTaskBody {
   /**
    * @minLength 1
@@ -41,6 +30,44 @@ export interface CreateTaskBody {
 
 export interface CompleteTaskBody {
   completed: boolean;
+}
+
+export interface UpdateTaskBody {
+  /**
+   * @minLength 1
+   * @maxLength 500
+   */
+  text?: string;
+  completed?: boolean;
+  /** One of health, work, learning, mindset */
+  category?: string;
+}
+
+export type CloseDayBodyOverallStatus =
+  (typeof CloseDayBodyOverallStatus)[keyof typeof CloseDayBodyOverallStatus];
+
+export const CloseDayBodyOverallStatus = {
+  great: "great",
+  partial: "partial",
+  missed: "missed",
+} as const;
+
+export type CloseDayBodyClosureSource =
+  (typeof CloseDayBodyClosureSource)[keyof typeof CloseDayBodyClosureSource];
+
+export const CloseDayBodyClosureSource = {
+  voice_agent: "voice_agent",
+  manual: "manual",
+} as const;
+
+export interface CloseDayBody {
+  /**
+   * @minLength 1
+   * @maxLength 1000
+   */
+  summaryText: string;
+  overallStatus: CloseDayBodyOverallStatus;
+  closureSource?: CloseDayBodyClosureSource;
 }
 
 export interface DeleteResult {
@@ -56,6 +83,17 @@ export interface CheckinResult {
   voicePersona: string;
   /** Human-friendly label for the persona */
   voicePersonaLabel: string;
+}
+
+export interface CategoryStreak {
+  /** One of health, work, learning, mindset */
+  category: string;
+  /** Human-friendly category name */
+  label: string;
+  /** Current consecutive days with at least one completed task in this category */
+  streak: number;
+  /** A short pattern insight for this category */
+  insight: string;
 }
 
 export interface UserPatterns {
@@ -87,6 +125,10 @@ export interface DailySummary {
   completionRate: number;
   voicePersonaUsed: string;
   hadCheckin: boolean;
+  summaryText?: string | null;
+  overallStatus?: string | null;
+  closedAt?: string | null;
+  closureSource?: string | null;
 }
 
 export interface VoicePersona {
@@ -123,7 +165,7 @@ export interface TaskRef {
 }
 
 /**
- * Session mode - checkin (default) or review
+ * Session mode for the voice workflow
  */
 export type AgentSessionBodyMode =
   (typeof AgentSessionBodyMode)[keyof typeof AgentSessionBodyMode];
@@ -145,7 +187,7 @@ export interface AgentSessionBody {
   tasks?: TaskRef[];
   /** Whether this is an evening check-in session */
   isEvening?: boolean;
-  /** Session mode - checkin (default) or review */
+  /** Session mode for the voice workflow */
   mode?: AgentSessionBodyMode;
 }
 
@@ -158,6 +200,8 @@ export interface AgentSessionResult {
   voicePersonaLabel: string;
   /** Whether the agent conversation is available */
   available: boolean;
+  /** Machine-readable reason when the session is unavailable */
+  reason?: string | null;
   /** Personalized system prompt to inject as override */
   systemPrompt?: string | null;
   /** Context-aware opening message for the agent */
@@ -169,6 +213,7 @@ export interface ConversationLogBody {
   voicePersonaLabel: string;
   /** ISO timestamp when conversation started */
   startedAt: string;
+  conversationId?: string | null;
   durationSeconds?: number | null;
   disconnectReason?: string | null;
   /** Session mode (checkin or review) */

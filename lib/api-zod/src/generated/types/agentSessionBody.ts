@@ -20,6 +20,6 @@ export interface AgentSessionBody {
   tasks?: TaskRef[];
   /** Whether this is an evening check-in session */
   isEvening?: boolean;
-  /** Session mode - checkin (default) or review */
+  /** Session mode for the voice workflow */
   mode?: AgentSessionBodyMode;
 }

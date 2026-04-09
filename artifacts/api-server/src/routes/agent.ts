@@ -2,7 +2,7 @@ import { Router } from "express";
 import { logger } from "../lib/logger";
 import { GetAgentSessionBody, LogConversationEndBody } from "@workspace/api-zod";
 import { db, conversationLogsTable } from "@workspace/db";
-import { isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getConvAiSignedUrl } from "../lib/elevenlabs";
 
 const router = Router();
@@ -34,7 +34,7 @@ function buildClientToolsInstruction(tasks: TaskRef[]): string {
   return `
 You have two live tools available during this conversation:
 - complete_task(task_id: number) — marks a task done in the app instantly. Pending task IDs: ${ids}
-- add_task(text: string) — adds a new task to today's list.
+- add_task(text: string) — adds a new task to today's list. IMPORTANT: only call this with specific, actionable tasks. The task text MUST include what + how much/how long (e.g. "Run 3km before 8am", "Read 20 pages of Atomic Habits", "Finish the login bug fix"). Reject single-word or vague tasks like "workout", "study", "work" — instead ask the user to be specific first. If their input is vague, say "I need more detail — what exactly will you do, and for how long?" before calling add_task.
 
 Always confirm before calling a tool ("Want me to mark that as done?"). After the tool runs, briefly acknowledge ("Done, marked that complete.").`;
 }
@@ -78,12 +78,12 @@ function buildSystemPrompt(
     const reviewInstruction = `
 
 TASK REVIEW MODE: Walk through today's task list with the user.
-1. Read each pending task and ask if the wording is clear and specific.
-2. Flag vague tasks (single words, generic terms like "work", "gym") and suggest specific rewrites.
+1. Read each pending task and assess whether it's specific and time-bound.
+2. Flag vague tasks (single words, generic terms like "work", "gym", "study") — push for rewrites with a clear action + duration or outcome (e.g. "gym" → "Do 30 min strength training at the gym").
 3. Spot duplicates and mention them.
-4. Use add_task to add improved versions when the user agrees. They can delete the old one.
+4. Use add_task ONLY for the improved specific version when the user agrees. Never add the vague original.
 5. Keep it conversational — not a monotone recitation.
-Start by telling them how many tasks you see and which ones look questionable.`;
+Start by telling them how many tasks you see and which ones need sharpening.`;
     return `${base}${reviewInstruction}\n\n${context}`;
   }
 
@@ -99,7 +99,12 @@ This is a wind-down, not a planning session. Keep it warm and brief.`;
     return `${base}${eveningInstruction}\n\n${context}`;
   }
 
-  return `${base}\n\n${context}`;
+  const morningInstruction = `
+
+MORNING CHECK-IN MODE:
+When helping the user set tasks, always push for specificity. A good task has: what they will do + how long or how much. If they say something vague like "work out" or "study", ask "for how long?" or "what exactly?" before calling add_task. Never add one-word or generic tasks.`;
+
+  return `${base}${morningInstruction}\n\n${context}`;
 }
 
 function buildFirstMessage(
@@ -301,10 +306,16 @@ router.post("/agent/webhook", async (req, res) => {
         .map((t) => `${t.role === "agent" ? "Coach" : "You"}: ${t.message}`)
         .join("\n");
 
+      const conversationId = body.data.conversation_id;
+      if (!conversationId) {
+        logger.warn("Webhook missing conversation_id, skipping transcript update");
+        res.json({ received: true });
+        return;
+      }
       await db
         .update(conversationLogsTable)
         .set({ transcript: lines })
-        .where(isNull(conversationLogsTable.transcript));
+        .where(eq(conversationLogsTable.conversationId, conversationId));
 
       logger.info({ conversationId: body.data.conversation_id, lines: body.data.transcript.length }, "Transcript stored from webhook");
     }

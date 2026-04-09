@@ -15,6 +15,8 @@ export interface AgentSessionResult {
   voicePersonaLabel: string;
   /** Whether the agent conversation is available */
   available: boolean;
+  /** Machine-readable reason when the session is unavailable */
+  reason?: string | null;
   /** Personalized system prompt to inject as override */
   systemPrompt?: string | null;
   /** Context-aware opening message for the agent */

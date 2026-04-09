@@ -1,12 +1,15 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { tasksTable, voicePersonasTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { dailySummariesTable, tasksTable, voicePersonasTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import {
+  CloseTodaySummaryBody,
   CreateTaskBody,
   CompleteTaskParams,
   CompleteTaskBody,
   DeleteTaskParams,
+  UpdateTaskBody,
+  UpdateTaskParams,
   ValidateTaskBody,
 } from "@workspace/api-zod";
 import { generateSpeech, isElevenLabsConfigured } from "../lib/elevenlabs";
@@ -56,7 +59,7 @@ const EXAMPLE_MAP: Record<string, string> = {
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   health: [
-    "run", "running", "gym", "workout", "exercise", "walk", "walking", "jog",
+    "run", "running", "gym", "workout", "work out", "exercise", "walk", "walking", "jog",
     "jogging", "bike", "cycling", "swim", "swimming", "yoga", "stretch",
     "health", "meditate", "meditation", "sleep", "eat", "diet", "nutrition",
     "cook", "cooking", "meal", "protein", "water", "hydrate", "steps",
@@ -81,7 +84,7 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     "nature", "walk outside", "gratitude list", "happiness",
   ],
   work: [
-    "work", "email", "meeting", "call", "report", "presentation", "project",
+    "email", "meeting", "call", "report", "presentation", "project",
     "client", "deadline", "coding", "review", "design",
     "strategy", "proposal", "invoice", "budget", "hire", "interview",
     "slack", "zoom", "teams", "office", "colleague", "manager", "team",
@@ -103,6 +106,21 @@ function matchesKeyword(lower: string, kw: string): boolean {
   return re.test(lower);
 }
 
+function levenshtein(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const curr = [i];
+    for (let j = 1; j <= b.length; j++) {
+      curr[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+    }
+    prev = curr;
+  }
+  return prev[b.length];
+}
+
 function detectCategory(text: string): string {
   const lower = text.toLowerCase();
   const scores: Record<string, number> = { health: 0, learning: 0, mindset: 0, work: 0 };
@@ -116,7 +134,23 @@ function detectCategory(text: string): string {
   }
 
   const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
-  return best[1] > 0 ? best[0] : "work";
+  if (best[1] > 0) return best[0];
+
+  // Fuzzy fallback — handles misspellings when no exact keyword matched
+  const inputWords = lower.split(/\s+/).filter((w) => w.length >= 5);
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (kw.includes(" ") || kw.length < 5) continue;
+      for (const word of inputWords) {
+        if (levenshtein(word, kw) <= 1) {
+          scores[cat] += 0.5;
+        }
+      }
+    }
+  }
+
+  const fuzzyBest = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
+  return fuzzyBest[1] > 0 ? fuzzyBest[0] : "work";
 }
 
 function detectVague(text: string): { isVague: boolean; suggestion: string | null } {
@@ -161,24 +195,30 @@ async function getActiveVoiceId(): Promise<string | null> {
       return d.toISOString().slice(0, 10);
     });
 
-    let missedDaysLast7 = 0;
-    let currentStreak = 0;
-    const todayTasks = await db.select().from(tasksTable).where(eq(tasksTable.date, today));
-    const todayCompleted = todayTasks.filter((t) => t.completed).length;
+    const [todayTasks, historyTasks] = await Promise.all([
+      db.select().from(tasksTable).where(eq(tasksTable.date, today)),
+      db.select().from(tasksTable).where(inArray(tasksTable.date, last7Dates)),
+    ]);
 
-    for (const date of last7Dates) {
-      const dayTasks = await db.select().from(tasksTable).where(eq(tasksTable.date, date));
-      const dayCompleted = dayTasks.filter((t) => t.completed).length;
-      if (dayTasks.length === 0 || dayCompleted === 0) missedDaysLast7++;
+    const tasksByDate = new Map<string, typeof historyTasks>();
+    for (const task of historyTasks) {
+      if (!tasksByDate.has(task.date)) tasksByDate.set(task.date, []);
+      tasksByDate.get(task.date)!.push(task);
     }
 
-    currentStreak = 0;
+    let missedDaysLast7 = 0;
+    let currentStreak = 0;
     for (const date of last7Dates) {
-      const dayTasks = await db.select().from(tasksTable).where(eq(tasksTable.date, date));
+      const dayTasks = tasksByDate.get(date) ?? [];
+      if (dayTasks.length === 0 || dayTasks.filter((t) => t.completed).length === 0) missedDaysLast7++;
+    }
+    for (const date of last7Dates) {
+      const dayTasks = tasksByDate.get(date) ?? [];
       if (dayTasks.filter((t) => t.completed).length > 0) currentStreak++;
       else break;
     }
 
+    const todayCompleted = todayTasks.filter((t) => t.completed).length;
     const { key: personaKey } = selectVoicePersona({
       missedDaysLast7,
       currentStreak,
@@ -306,6 +346,107 @@ router.patch("/tasks/:id/complete", async (req, res) => {
     return;
   }
   res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
+});
+
+// PATCH /api/tasks/:id
+router.patch("/tasks/:id", async (req, res) => {
+  const params = UpdateTaskParams.safeParse({ id: Number(req.params.id) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid task id" });
+    return;
+  }
+
+  const body = UpdateTaskBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const updates: { text?: string; completed?: boolean; category?: string } = {};
+  if (body.data.text !== undefined) {
+    updates.text = body.data.text;
+    updates.category = body.data.category ?? detectCategory(body.data.text);
+  }
+  if (body.data.completed !== undefined) {
+    updates.completed = body.data.completed;
+  }
+  if (body.data.category !== undefined) {
+    updates.category = body.data.category;
+  }
+
+  const [updated] = await db
+    .update(tasksTable)
+    .set(updates)
+    .where(eq(tasksTable.id, params.data.id))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+
+  res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
+});
+
+// PATCH /api/daily-summary/today/close
+router.patch("/daily-summary/today/close", async (req, res) => {
+  const parsed = CloseTodaySummaryBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const today = todayDate();
+  const todayTasks = await db
+    .select()
+    .from(tasksTable)
+    .where(eq(tasksTable.date, today));
+  const completedTasks = todayTasks.filter((task) => task.completed).length;
+  const totalTasks = todayTasks.length;
+  const completionRate = totalTasks > 0 ? completedTasks / totalTasks : 0;
+
+  const [summary] = await db
+    .insert(dailySummariesTable)
+    .values({
+      date: today,
+      totalTasks,
+      completedTasks,
+      completionRate,
+      voicePersonaUsed: "sunny",
+      hadCheckin: true,
+      summaryText: parsed.data.summaryText,
+      overallStatus: parsed.data.overallStatus,
+      closureSource: parsed.data.closureSource ?? "voice_agent",
+      closedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: dailySummariesTable.date,
+      set: {
+        totalTasks,
+        completedTasks,
+        completionRate,
+        summaryText: parsed.data.summaryText,
+        overallStatus: parsed.data.overallStatus,
+        closureSource: parsed.data.closureSource ?? "voice_agent",
+        closedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  res.json({
+    date: summary.date,
+    totalTasks: summary.totalTasks,
+    completedTasks: summary.completedTasks,
+    completionRate: summary.completionRate,
+    voicePersonaUsed: summary.voicePersonaUsed,
+    hadCheckin: summary.hadCheckin,
+    summaryText: summary.summaryText,
+    overallStatus: summary.overallStatus,
+    closedAt: summary.closedAt?.toISOString() ?? null,
+    closureSource: summary.closureSource,
+  });
 });
 
 // DELETE /api/tasks/:id

@@ -22,6 +22,7 @@ import type {
   AgentWebhookBody,
   AgentWebhookResult,
   CheckinResult,
+  CloseDayBody,
   CompleteTaskBody,
   ConversationLogBody,
   ConversationLogResult,
@@ -31,6 +32,7 @@ import type {
   DemoModeResult,
   HealthStatus,
   Task,
+  UpdateTaskBody,
   UserPatterns,
   ValidateTaskBody,
   ValidateTaskResult,
@@ -368,6 +370,93 @@ export const useCompleteTask = <
 };
 
 /**
+ * @summary Partially update a task
+ */
+export const getUpdateTaskUrl = (id: number) => {
+  return `/api/tasks/${id}`;
+};
+
+export const updateTask = async (
+  id: number,
+  updateTaskBody: UpdateTaskBody,
+  options?: RequestInit,
+): Promise<Task> => {
+  return customFetch<Task>(getUpdateTaskUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateTaskBody),
+  });
+};
+
+export const getUpdateTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTask>>,
+    TError,
+    { id: number; data: BodyType<UpdateTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTask>>,
+  TError,
+  { id: number; data: BodyType<UpdateTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["updateTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTask>>,
+    { id: number; data: BodyType<UpdateTaskBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateTask(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTask>>
+>;
+export type UpdateTaskMutationBody = BodyType<UpdateTaskBody>;
+export type UpdateTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Partially update a task
+ */
+export const useUpdateTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTask>>,
+    TError,
+    { id: number; data: BodyType<UpdateTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTask>>,
+  TError,
+  { id: number; data: BodyType<UpdateTaskBody> },
+  TContext
+> => {
+  return useMutation(getUpdateTaskMutationOptions(options));
+};
+
+/**
  * @summary Delete a task
  */
 export const getDeleteTaskUrl = (id: number) => {
@@ -449,6 +538,92 @@ export const useDeleteTask = <
   TContext
 > => {
   return useMutation(getDeleteTaskMutationOptions(options));
+};
+
+/**
+ * @summary Close out the current day with a short summary and overall status
+ */
+export const getCloseTodaySummaryUrl = () => {
+  return `/api/daily-summary/today/close`;
+};
+
+export const closeTodaySummary = async (
+  closeDayBody: CloseDayBody,
+  options?: RequestInit,
+): Promise<DailySummary> => {
+  return customFetch<DailySummary>(getCloseTodaySummaryUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(closeDayBody),
+  });
+};
+
+export const getCloseTodaySummaryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeTodaySummary>>,
+    TError,
+    { data: BodyType<CloseDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof closeTodaySummary>>,
+  TError,
+  { data: BodyType<CloseDayBody> },
+  TContext
+> => {
+  const mutationKey = ["closeTodaySummary"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof closeTodaySummary>>,
+    { data: BodyType<CloseDayBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return closeTodaySummary(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CloseTodaySummaryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof closeTodaySummary>>
+>;
+export type CloseTodaySummaryMutationBody = BodyType<CloseDayBody>;
+export type CloseTodaySummaryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Close out the current day with a short summary and overall status
+ */
+export const useCloseTodaySummary = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeTodaySummary>>,
+    TError,
+    { data: BodyType<CloseDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof closeTodaySummary>>,
+  TError,
+  { data: BodyType<CloseDayBody> },
+  TContext
+> => {
+  return useMutation(getCloseTodaySummaryMutationOptions(options));
 };
 
 /**
@@ -1183,19 +1358,18 @@ export const useAgentWebhook = <
 };
 
 /**
- * @summary Toggle demo mode (Commander persona simulation)
+ * @summary Toggle demo mode to simulate missed-days Commander persona state
  */
-export const getDemoToggleUrl = () => {
+export const getToggleDemoModeUrl = () => {
   return `/api/demo/toggle`;
 };
 
 export const toggleDemoMode = async (
   options?: RequestInit,
 ): Promise<DemoModeResult> => {
-  return customFetch<DemoModeResult>(getDemoToggleUrl(), {
+  return customFetch<DemoModeResult>(getToggleDemoModeUrl(), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
   });
 };
 
@@ -1235,11 +1409,14 @@ export const getToggleDemoModeMutationOptions = <
   return { mutationFn, ...mutationOptions };
 };
 
-export type ToggleDemoModeMutationResult = DemoModeResult;
+export type ToggleDemoModeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof toggleDemoMode>>
+>;
+
 export type ToggleDemoModeMutationError = ErrorType<unknown>;
 
 /**
- * @summary Toggle demo mode (Commander persona simulation)
+ * @summary Toggle demo mode to simulate missed-days Commander persona state
  */
 export const useToggleDemoMode = <
   TError = ErrorType<unknown>,

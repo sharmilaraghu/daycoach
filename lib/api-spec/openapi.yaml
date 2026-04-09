@@ -91,6 +91,30 @@ paths:
                 $ref: "#/components/schemas/Task"
 
   /tasks/{id}:
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Partially update a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskBody"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
     delete:
       operationId: deleteTask
       tags: [tasks]
@@ -108,6 +132,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteResult"
+
+  /daily-summary/today/close:
+    patch:
+      operationId: closeTodaySummary
+      tags: [checkin]
+      summary: Close out the current day with a short summary and overall status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseDayBody"
+      responses:
+        "200":
+          description: Updated daily summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySummary"
 
   /checkin/morning:
     post:
@@ -320,6 +363,37 @@ components:
       required:
         - completed
 
+    UpdateTaskBody:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
+        completed:
+          type: boolean
+        category:
+          type: string
+          description: One of health, work, learning, mindset
+      minProperties: 1
+
+    CloseDayBody:
+      type: object
+      properties:
+        summaryText:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        overallStatus:
+          type: string
+          enum: [great, partial, missed]
+        closureSource:
+          type: string
+          enum: [voice_agent, manual]
+      required:
+        - summaryText
+        - overallStatus
+
     DeleteResult:
       type: object
       properties:
@@ -435,6 +509,18 @@ components:
           type: string
         hadCheckin:
           type: boolean
+        summaryText:
+          type: string
+          nullable: true
+        overallStatus:
+          type: string
+          nullable: true
+        closedAt:
+          type: string
+          nullable: true
+        closureSource:
+          type: string
+          nullable: true
       required:
         - date
         - totalTasks
@@ -535,7 +621,7 @@ components:
           description: Whether this is an evening check-in session
         mode:
           type: string
-          description: Session mode - checkin (default) or review
+          description: Session mode for the voice workflow
           enum: [checkin, review]
       required:
         - currentStreak
@@ -564,6 +650,10 @@ components:
         available:
           type: boolean
           description: Whether the agent conversation is available
+        reason:
+          type: string
+          description: Machine-readable reason when the session is unavailable
+          nullable: true
         systemPrompt:
           type: string
           description: Personalized system prompt to inject as override
@@ -587,6 +677,9 @@ components:
         startedAt:
           type: string
           description: ISO timestamp when conversation started
+        conversationId:
+          type: string
+          nullable: true
         durationSeconds:
           type: integer
           nullable: true

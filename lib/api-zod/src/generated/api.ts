@@ -57,6 +57,33 @@ export const CompleteTaskResponse = zod.object({
 });
 
 /**
+ * @summary Partially update a task
+ */
+export const UpdateTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const updateTaskBodyTextMax = 500;
+
+export const UpdateTaskBody = zod.object({
+  text: zod.string().min(1).max(updateTaskBodyTextMax).optional(),
+  completed: zod.boolean().optional(),
+  category: zod
+    .string()
+    .optional()
+    .describe("One of health, work, learning, mindset"),
+});
+
+export const UpdateTaskResponse = zod.object({
+  id: zod.number(),
+  text: zod.string(),
+  completed: zod.boolean(),
+  date: zod.string().describe("ISO date string (YYYY-MM-DD)"),
+  category: zod.string().describe("One of health, work, learning, mindset"),
+  createdAt: zod.string(),
+});
+
+/**
  * @summary Delete a task
  */
 export const DeleteTaskParams = zod.object({
@@ -65,6 +92,30 @@ export const DeleteTaskParams = zod.object({
 
 export const DeleteTaskResponse = zod.object({
   success: zod.boolean(),
+});
+
+/**
+ * @summary Close out the current day with a short summary and overall status
+ */
+export const closeTodaySummaryBodySummaryTextMax = 1000;
+
+export const CloseTodaySummaryBody = zod.object({
+  summaryText: zod.string().min(1).max(closeTodaySummaryBodySummaryTextMax),
+  overallStatus: zod.enum(["great", "partial", "missed"]),
+  closureSource: zod.enum(["voice_agent", "manual"]).optional(),
+});
+
+export const CloseTodaySummaryResponse = zod.object({
+  date: zod.string(),
+  totalTasks: zod.number(),
+  completedTasks: zod.number(),
+  completionRate: zod.number(),
+  voicePersonaUsed: zod.string(),
+  hadCheckin: zod.boolean(),
+  summaryText: zod.string().nullish(),
+  overallStatus: zod.string().nullish(),
+  closedAt: zod.string().nullish(),
+  closureSource: zod.string().nullish(),
 });
 
 /**
@@ -94,17 +145,6 @@ export const EveningCheckinResponse = zod.object({
 /**
  * @summary Get user behavioral patterns
  */
-export const CategoryStreakItem = zod.object({
-  category: zod.string().describe("One of health, work, learning, mindset"),
-  label: zod.string().describe("Human-friendly category name"),
-  streak: zod
-    .number()
-    .describe(
-      "Current consecutive days with at least one completed task in this category",
-    ),
-  insight: zod.string().describe("A short pattern insight for this category"),
-});
-
 export const GetPatternsResponse = zod.object({
   currentStreak: zod
     .number()
@@ -127,7 +167,22 @@ export const GetPatternsResponse = zod.object({
   todayCompleted: zod.number(),
   todayTotal: zod.number(),
   categoryStreaks: zod
-    .array(CategoryStreakItem)
+    .array(
+      zod.object({
+        category: zod
+          .string()
+          .describe("One of health, work, learning, mindset"),
+        label: zod.string().describe("Human-friendly category name"),
+        streak: zod
+          .number()
+          .describe(
+            "Current consecutive days with at least one completed task in this category",
+          ),
+        insight: zod
+          .string()
+          .describe("A short pattern insight for this category"),
+      }),
+    )
     .describe("Per-category streaks and insights"),
   demoMode: zod
     .boolean()
@@ -144,6 +199,10 @@ export const GetHistoryResponseItem = zod.object({
   completionRate: zod.number(),
   voicePersonaUsed: zod.string(),
   hadCheckin: zod.boolean(),
+  summaryText: zod.string().nullish(),
+  overallStatus: zod.string().nullish(),
+  closedAt: zod.string().nullish(),
+  closureSource: zod.string().nullish(),
 });
 export const GetHistoryResponse = zod.array(GetHistoryResponseItem);
 
@@ -211,7 +270,7 @@ export const GetAgentSessionBody = zod.object({
   mode: zod
     .enum(["checkin", "review"])
     .optional()
-    .describe("Session mode - checkin (default) or review"),
+    .describe("Session mode for the voice workflow"),
 });
 
 export const GetAgentSessionResponse = zod.object({
@@ -225,6 +284,10 @@ export const GetAgentSessionResponse = zod.object({
   available: zod
     .boolean()
     .describe("Whether the agent conversation is available"),
+  reason: zod
+    .string()
+    .nullish()
+    .describe("Machine-readable reason when the session is unavailable"),
   systemPrompt: zod
     .string()
     .nullish()
@@ -242,6 +305,7 @@ export const LogConversationEndBody = zod.object({
   voicePersona: zod.string(),
   voicePersonaLabel: zod.string(),
   startedAt: zod.string().describe("ISO timestamp when conversation started"),
+  conversationId: zod.string().nullish(),
   durationSeconds: zod.number().nullish(),
   disconnectReason: zod.string().nullish(),
   mode: zod.string().nullish().describe("Session mode (checkin or review)"),
