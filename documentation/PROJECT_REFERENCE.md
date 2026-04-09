@@ -1,455 +1,218 @@
 # DayCoach — Project Reference
 
-> Voice-powered daily accountability app built for the ElevenLabs + Replit Hackathon (ElevenHacks #3).  
-> Uses ElevenLabs Conversational AI with 4 adaptive coach personas, real-time client tools, and post-call webhooks.
+Voice-powered daily accountability app. React 19 frontend + Express 5 API + PostgreSQL + ElevenLabs Conversational AI.
 
 ---
 
-## Table of Contents
-
-1. [Project Architecture](#1-project-architecture)
-2. [Tech Stack](#2-tech-stack)
-3. [Folder Structure](#3-folder-structure)
-4. [Environment Variables — How to Get Them](#4-environment-variables--how-to-get-them)
-5. [ElevenLabs Setup](#5-elevenlabs-setup)
-6. [Voice Personas](#6-voice-personas)
-7. [Client Tools](#7-client-tools)
-8. [Webhook Setup](#8-webhook-setup)
-9. [API Routes Reference](#9-api-routes-reference)
-10. [Database Schema](#10-database-schema)
-11. [Key Commands](#11-key-commands)
-12. [Running Locally (Outside Replit)](#12-running-locally-outside-replit)
-13. [Incomplete / Next Steps](#13-incomplete--next-steps)
-
----
-
-## 1. Project Architecture
+## Architecture
 
 ```
-Browser (React + Vite)
-    ↕  REST API calls (React Query hooks)
+Browser (React + Vite, port 5173)
+    ↕  REST API  (React Query — generated hooks)
     ↕  WebSocket (ElevenLabs Conversational AI SDK)
-Express API Server (Port 8080)
-    ↕  PostgreSQL (Drizzle ORM)
-    ↕  ElevenLabs REST API (TTS, Voice Design, Signed URLs)
+
+Express API Server (port 8080)
+    ↕  PostgreSQL via Drizzle ORM
+    ↕  ElevenLabs REST API (signed URLs, TTS)
+
 ElevenLabs Cloud
-    → POST-call webhook → Express /api/agent/webhook
+    → post-call webhook → POST /api/agent/webhook
 ```
 
-**Session flow:**
-1. User taps coach → frontend calls `POST /api/agent/session`
-2. API selects agent based on streak/pattern, generates signed URL + system prompt
-3. Frontend opens WebSocket to ElevenLabs using the signed URL
-4. Agent speaks; user responds via mic
-5. During call: client tools (`complete_task`, `add_task`) update the DB in real-time
-6. Call ends → ElevenLabs fires webhook → transcript stored in DB
+**Voice session flow:**
+1. User taps a coach button → `POST /api/agent/session`
+2. Server selects agent by streak/pattern, builds system prompt, returns signed URL
+3. Frontend connects WebSocket to ElevenLabs via signed URL
+4. During call: client tools (`complete_task`, `add_task`) update DB and UI in real time
+5. Call ends → ElevenLabs webhook fires → transcript stored in `conversation_logs`
 
 ---
 
-## 2. Tech Stack
+## Folder Structure
+
+```
+artifacts/
+  api-server/src/
+    routes/
+      agent.ts          # /api/agent/* — session, webhook, conversation log
+      tasks.ts          # /api/tasks/* — CRUD, validation, category detection
+      patterns.ts       # /api/patterns, /api/history, /api/voice-personas
+      checkin.ts        # /api/checkin/morning|evening
+      audio.ts          # /api/audio/:id — serve TTS audio files
+    lib/
+      elevenlabs.ts     # ElevenLabs API (TTS, signed URL, voice design)
+      voicePersonaSelector.ts  # Streak-based persona selection logic
+      audioStore.ts     # In-memory audio file cache
+  daycoach/src/
+    App.tsx             # All UI: voice session, client tools, task list, history
+
+lib/
+  db/src/schema/        # Drizzle table definitions (source of truth for DB shape)
+  api-spec/openapi.yaml # OpenAPI 3.1 spec (source of truth for API shape)
+  api-zod/              # Auto-generated Zod validators — DO NOT edit
+  api-client-react/     # Auto-generated React Query hooks — DO NOT edit
+
+scripts/src/
+  seed-demo.ts          # Inserts 10 days of realistic demo data
+```
+
+---
+
+## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | React + Vite, TypeScript, Tailwind CSS |
-| Voice SDK | `@11labs/react` (Conversational AI) |
-| Backend | Express 5, Node.js 24, TypeScript |
-| Database | PostgreSQL + Drizzle ORM |
-| Validation | Zod v4, drizzle-zod |
-| API Spec | OpenAPI 3.1 (Orval for codegen) |
+|---|---|
+| Frontend | React 19, Vite, Tailwind CSS 4, shadcn/ui |
+| Voice | `@11labs/react` Conversational AI SDK |
+| Backend | Express 5, Node.js 24, TypeScript 5.9 strict |
+| Database | PostgreSQL, Drizzle ORM |
+| Validation | Zod v4 (auto-generated from OpenAPI) |
+| API Codegen | Orval (OpenAPI → React Query hooks + Zod schemas) |
 | Monorepo | pnpm workspaces |
-| Build | esbuild (CJS) |
-| Platform | Replit (originally) |
 
 ---
 
-## 3. Folder Structure
+## Voice Personas
 
-```
-DayCoach/
-├── artifacts/
-│   ├── daycoach/           # React frontend (Port 3000 / Replit port 20249)
-│   │   └── src/
-│   │       ├── App.tsx     # Main app — voice session, client tools, task UI
-│   │       └── components/ # ConversationOverlay, VagueSuggestion, Shell
-│   └── api-server/         # Express backend (Port 8080 / Replit port 20250)
-│       └── src/
-│           ├── routes/
-│           │   ├── agent.ts      # /api/agent/* — session, webhook, logs
-│           │   ├── tasks.ts      # /api/tasks/*
-│           │   ├── checkins.ts   # /api/checkin/morning|evening
-│           │   ├── patterns.ts   # /api/patterns
-│           │   └── history.ts    # /api/history
-│           └── lib/
-│               ├── elevenlabs.ts # ElevenLabs API calls (TTS, signed URL, voice design)
-│               └── voicePersonaSelector.ts
-├── lib/
-│   ├── db/                 # Drizzle schema + migrations
-│   ├── api-spec/           # openapi.yaml — source of truth for API shape
-│   ├── api-zod/            # Auto-generated Zod validators (run codegen)
-│   └── api-client-react/   # Auto-generated React Query hooks (run codegen)
-├── scripts/
-│   └── src/seed-demo.ts    # Populates 10 days of realistic demo data
-├── documentation/          # ← You are here
-├── package.json
-├── pnpm-workspace.yaml
-├── tsconfig.base.json
-└── .replit
-```
+Four personas selected automatically — user never picks manually.
+
+| Persona | Env var | Triggered when |
+|---|---|---|
+| Sunny | `ELEVENLABS_AGENT_SUNNY` | Streak ≥ 2 days |
+| Coach | `ELEVENLABS_AGENT_COACH` | Missed 1–2 days |
+| Commander | `ELEVENLABS_AGENT_COMMANDER` | Missed 3+ days |
+| Champion | `ELEVENLABS_AGENT_CHAMPION` | 100% completion today |
+
+Selection logic: `lib/voicePersonaSelector.ts` → `selectVoicePersona()`
+
+System prompts are built at runtime in `agent.ts` → `buildSystemPrompt()` and injected via the ElevenLabs SDK `overrides` param at session start. Nothing is hardcoded in the ElevenLabs dashboard.
 
 ---
 
-## 4. Environment Variables — How to Get Them
+## Client Tools
 
-You need these 6 env vars. Here's exactly where each one comes from:
+The coach calls these during live conversation. The ElevenLabs SDK fires the browser-side handler, which hits the API and updates state in real time.
 
----
+| Tool | Handler in App.tsx | API call |
+|---|---|---|
+| `complete_task(task_id)` | lines ~304–323 | `PATCH /api/tasks/:id/complete` |
+| `add_task(text)` | lines ~324–338 | `POST /api/tasks` |
 
-### `DATABASE_URL`
+**Dashboard setup required for each agent:**
+- Agent Settings → Tools → Add Client Tool
+- `complete_task`: parameter `task_id` (number, required)
+- `add_task`: parameter `text` (string, required)
 
-**What it is:** PostgreSQL connection string.
-
-**On Replit (original method):**
-1. Open your Repl
-2. In the left sidebar → click **Tools** → **Database**
-3. Replit spins up a free PostgreSQL database
-4. The `DATABASE_URL` is **automatically added to your Repl's Secrets** — you don't type it yourself
-5. To view it: go to **Secrets** tab (lock icon in sidebar) → find `DATABASE_URL`
-6. It looks like: `postgresql://user:password@host:5432/dbname`
-
-**Outside Replit (local dev or other platforms):**
-- Use [Neon](https://neon.tech) (free PostgreSQL, similar to Replit's) — sign up, create a project, copy the connection string
-- Or use [Supabase](https://supabase.com) → Project Settings → Database → Connection String
-- Or run locally: `postgresql://postgres:password@localhost:5432/daycoach`
-
-After getting the URL, run the DB migration:
-```bash
-pnpm --filter @workspace/db run push
-```
+**Override settings required for each agent:**
+- Agent Settings → Security → Allow client to override: **System prompt** ✓ and **First message** ✓
 
 ---
 
-### `SESSION_SECRET`
+## API Routes
 
-**What it is:** A random string used by Express to sign session cookies. Can be anything long and random — it just needs to be consistent across restarts.
-
-**On Replit (original method):**
-- You (or Replit agent) added this manually to Replit Secrets
-- It was likely generated as a random string
-
-**How to generate a new one:**
-```bash
-# Option 1 — openssl (any terminal)
-openssl rand -base64 32
-
-# Option 2 — Node.js
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-Copy the output and set it as your `SESSION_SECRET`. Keep it secret — don't commit to git.
-
----
-
-### `ELEVENLABS_API_KEY`
-
-**What it is:** Your ElevenLabs account API key.
-
-**How to get it:**
-1. Go to [elevenlabs.io](https://elevenlabs.io) → sign in
-2. Click your profile icon (top right) → **Profile + API Key**
-3. Copy the API key shown there
-4. Paste into Replit Secrets (or `.env` file locally)
-
----
-
-### `ELEVENLABS_AGENT_SUNNY`, `_COACH`, `_COMMANDER`, `_CHAMPION`
-
-**What they are:** ElevenLabs Conversational AI agent IDs — one per persona.
-
-**How to get them:**
-1. Go to [elevenlabs.io](https://elevenlabs.io) → **Products** → **Conversational AI**
-2. You should see your 4 agents: Sunny, Coach, Commander, Champion
-3. Click each agent → the **Agent ID** is shown in the URL or on the agent page
-4. It looks like: `agent_01abc123...`
-
-> If the agents are missing (e.g., Replit environment was reset), you need to recreate them in the ElevenLabs dashboard. The system prompts are built dynamically in `artifacts/api-server/src/routes/agent.ts` — you don't need to set them in the dashboard, just create agents with any placeholder prompt.
-
----
-
-## 5. ElevenLabs Setup
-
-### What features are used
-
-| Feature | Where in code | What it does |
-|---------|--------------|-------------|
-| Conversational AI | `App.tsx` → `useConversation` hook | Live voice chat with agent |
-| Signed URL | `elevenlabs.ts` → `getConvAiSignedUrl()` | Secure connection for private agents |
-| Client Tools | `App.tsx` lines 302–339 | Agent calls functions in the app during conversation |
-| Post-call Webhook | `agent.ts` lines 280–317 | Receives transcript after call ends |
-| TTS | `elevenlabs.ts` → `generateSpeech()` | Coaches on vague tasks (audio tip) |
-| Voice Design API | `elevenlabs.ts` → `createVoicePreviews()` | Create custom voices (not actively used in UI) |
-
-### Agent configuration (ElevenLabs Dashboard)
-
-The system prompt and first message are **injected at runtime** from the API — you don't need to configure them in the dashboard. But you do need to:
-
-1. Enable **Client Tools** on each agent (see section 7)
-2. Add the **Webhook URL** on each agent (see section 8)
-3. Set the agent to **private** (requires signed URL — already handled)
-
----
-
-## 6. Voice Personas
-
-Four personas, each mapped to an ElevenLabs agent. The persona is selected automatically based on the user's streak and missed days:
-
-| Env Var | Persona | Agent ID | Voice style | Triggered when |
-|---------|---------|----------|-------------|----------------|
-| `ELEVENLABS_AGENT_SUNNY` | Sunny | `agent_REDACTED_SUNNY` | Warm, encouraging | Streak ≥ 2 days |
-| `ELEVENLABS_AGENT_COACH` | Coach | `agent_REDACTED_COACH` | Calm but direct | Missed 1–2 days |
-| `ELEVENLABS_AGENT_COMMANDER` | Commander | `agent_REDACTED_COMMANDER` | Blunt, no excuses | Missed 3+ days |
-| `ELEVENLABS_AGENT_CHAMPION` | Champion | `agent_REDACTED_CHAMPION` | Celebratory, hype | 100% completion today |
-
-Selection logic: `artifacts/api-server/src/lib/voicePersonaSelector.ts`
-
-System prompts are built dynamically in `agent.ts` → `buildSystemPrompt()` and injected via the ElevenLabs SDK override at session start.
-
----
-
-## 7. Client Tools
-
-Client tools allow the agent to call functions **in the browser** during a conversation, updating the UI and database in real-time.
-
-### Tools defined in `App.tsx` (lines 302–339)
-
-```
-complete_task(task_id: number)
-  → PATCH /api/tasks/:id/complete
-  → marks the task done, updates UI instantly
-
-add_task(text: string)
-  → POST /api/tasks
-  → adds a new task during conversation
-```
-
-### How to register them in ElevenLabs Dashboard
-
-1. Go to your agent → **Tools** tab
-2. Add a **Client Tool** (not a server tool)
-3. Name: `complete_task`, Parameter: `task_id` (type: number, required)
-4. Name: `add_task`, Parameter: `text` (type: string, required)
-5. Repeat for all 4 agents
-
-> Client tools run in the browser — the agent calls them, the SDK fires the callback in `App.tsx`, and the result is reported back to the agent automatically.
-
----
-
-## 8. Webhook Setup
-
-The webhook receives the full conversation transcript after the call ends.
-
-### Endpoint in the app
-
-```
-POST /api/agent/webhook
-```
-
-Implemented in: `artifacts/api-server/src/routes/agent.ts` lines 280–317
-
-Listens for: `conversation.ended` event  
-Stores: transcript in `conversation_logs` table
-
-### Configure in ElevenLabs Dashboard
-
-For **each of the 4 agents**:
-1. Go to ElevenLabs → your agent → **Webhooks** tab
-2. Add webhook URL: `https://<your-domain>/api/agent/webhook`
-3. Enable event: `conversation.ended`
-4. Save
-
-Your domain on Replit looks like: `https://daycoach.<your-username>.repl.co`
-
-> **Known limitation:** The current webhook handler updates the first `conversation_log` row with a NULL transcript. This can cause issues if two calls end simultaneously. For hackathon purposes it's fine — a production fix would match by `conversation_id`.
-
----
-
-## 9. API Routes Reference
-
-### Agent
-
-| Method | Route | Purpose |
-|--------|-------|---------|
-| POST | `/api/agent/session` | Get signed URL + system prompt for a coach session |
-| POST | `/api/agent/conversation-log` | Log conversation metadata after call |
-| POST | `/api/agent/webhook` | Receive ElevenLabs post-call webhook |
+### Voice / Agent
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/agent/session` | Get signed URL + system prompt for a session |
+| POST | `/api/agent/conversation-log` | Store conversation metadata |
+| POST | `/api/agent/webhook` | Receive ElevenLabs post-call transcript |
 
 ### Tasks
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/tasks/today` | Today's task list |
+| POST | `/api/tasks` | Create task (auto-detects category) |
+| PATCH | `/api/tasks/:id` | Update task text or category |
+| PATCH | `/api/tasks/:id/complete` | Toggle completion |
+| DELETE | `/api/tasks/:id` | Delete task |
+| POST | `/api/tasks/validate` | Check vagueness, return suggestion + TTS audio |
 
-| Method | Route | Purpose |
-|--------|-------|---------|
-| GET | `/api/tasks` | Get today's tasks |
-| POST | `/api/tasks` | Create a task |
-| PATCH | `/api/tasks/:id/complete` | Mark task complete |
-| DELETE | `/api/tasks/:id` | Delete a task |
-| POST | `/api/tasks/validate` | Check if task is vague + return TTS coaching audio |
+### Insights
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/patterns` | Streak, missed days, persona, category streaks |
+| GET | `/api/history` | 14-day history with per-day task breakdown |
+| GET | `/api/voice-personas` | List of 4 personas |
 
-### Check-ins
-
-| Method | Route | Purpose |
-|--------|-------|---------|
+### Check-in (audio)
+| Method | Path | Purpose |
+|---|---|---|
 | POST | `/api/checkin/morning` | Generate morning briefing audio |
 | POST | `/api/checkin/evening` | Generate evening reflection audio |
 
-### Insights
-
-| Method | Route | Purpose |
-|--------|-------|---------|
-| GET | `/api/patterns` | Streak, missed days, persona, per-category stats |
-| GET | `/api/history` | Daily summaries for the last 14 days |
-| GET | `/api/voice-personas` | List of 4 configured personas |
-
-### Demo
-
-| Method | Route | Purpose |
-|--------|-------|---------|
-| POST | `/api/demo/toggle` | Toggle demo mode (forces Commander persona) |
-
 ---
 
-## 10. Database Schema
+## Database Schema
 
-All tables managed via Drizzle ORM. Schema lives in `lib/db/src/schema/`.
+Managed via Drizzle ORM. Schema: `lib/db/src/schema/index.ts`
 
-### `tasks`
+**`tasks`** — today's commitments
 ```
-id          serial PK
-text        varchar
-date        date (defaults to today)
-completed   boolean (default false)
-category    varchar (Health | Work | Learning | Mindset — auto-detected)
-created_at  timestamp
+id, text, date, completed, category, created_at
 ```
 
-### `checkins`
+**`conversation_logs`** — one row per voice session
 ```
-id          serial PK
-type        varchar (morning | evening)
-date        date
-script      text (generated script)
-persona     varchar
-created_at  timestamp
+id, conversation_id, voice_persona, voice_persona_label,
+started_at, ended_at, duration_seconds, disconnect_reason,
+mode (checkin|review), transcript, created_at
 ```
 
-### `voice_personas`
+**`daily_summaries`** — end-of-day snapshot (written by close-day flow)
 ```
-id          serial PK
-key         varchar (sunny | coach | commander | champion)
-label       varchar
-voice_id    varchar (ElevenLabs voice ID)
-description text
+id, date, total_tasks, completed_tasks, completion_rate,
+voice_persona_used, had_checkin, summary_text, overall_status,
+closed_at, closure_source, updated_at
 ```
 
-### `daily_summaries`
+**`voice_personas`** — persona config (optional, can also use env vars directly)
 ```
-id              serial PK
-date            date
-total_tasks     integer
-completed_tasks integer
-completion_rate numeric
-persona_used    varchar
-created_at      timestamp
+id, key, label, description, condition, elevenlabs_voice_id, elevenlabs_agent_id
 ```
 
-### `conversation_logs`
+**`checkins`** — morning/evening audio briefings
 ```
-id               serial PK
-voice_persona    varchar
-voice_persona_label varchar
-started_at       timestamp
-ended_at         timestamp
-duration_seconds integer
-disconnect_reason varchar
-mode             varchar (checkin | review)
-transcript       text (filled in by webhook)
-created_at       timestamp
+id, date, type, script, voice_persona_key, created_at
 ```
 
 ---
 
-## 11. Key Commands
+## Category Detection
+
+Tasks are auto-tagged into: `health`, `work`, `learning`, `mindset`.
+
+Logic in `tasks.ts` → `detectCategory()`:
+1. Keyword scoring (multi-word phrases score higher)
+2. Levenshtein fuzzy fallback for misspellings (distance ≤ 1)
+3. Default: `work` if no match
+
+---
+
+## Key Commands
 
 ```bash
-# Install all dependencies (run this first after moving the project)
+# Install (run first)
 pnpm install
 
-# Push DB schema to PostgreSQL (run after setting DATABASE_URL)
+# Start both servers
+./start.sh
+# API: http://localhost:8080  Frontend: http://localhost:5173
+
+# Push DB schema
 pnpm --filter @workspace/db run push
 
-# Run API server in dev mode
-pnpm --filter @workspace/api-server run dev
+# Seed 10 days of demo data
+pnpm --filter @workspace/scripts run seed-demo
 
-# Run frontend in dev mode
-pnpm --filter @workspace/daycoach run dev
-
-# Regenerate React hooks + Zod types from OpenAPI spec
+# Regenerate API client after editing openapi.yaml
 pnpm --filter @workspace/api-spec run codegen
 
-# Typecheck everything
+# Type check all packages
 pnpm run typecheck
-
-# Build all packages
-pnpm run build
-
-# Populate demo data (10 days of realistic tasks)
-pnpm --filter @workspace/scripts run tsx src/seed-demo.ts
 ```
 
 ---
 
-## 12. Running Locally (Outside Replit)
+## Setup Guide
 
-1. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
-
-2. **Set up environment variables** — `.env` file is already at `artifacts/api-server/.env` with all values filled in. Template:
-   ```env
-   DATABASE_URL=postgresql://postgres:password@helium/heliumdb?sslmode=disable
-   SESSION_SECRET=<generated>
-   ELEVENLABS_API_KEY=<see .env>
-   ELEVENLABS_AGENT_SUNNY=agent_REDACTED_SUNNY
-   ELEVENLABS_AGENT_COACH=agent_REDACTED_COACH
-   ELEVENLABS_AGENT_COMMANDER=agent_REDACTED_COMMANDER
-   ELEVENLABS_AGENT_CHAMPION=agent_REDACTED_CHAMPION
-   ```
-
-3. **Push DB schema**
-   ```bash
-   pnpm --filter @workspace/db run push
-   ```
-
-4. **Start API server** (terminal 1)
-   ```bash
-   pnpm --filter @workspace/api-server run dev
-   # Runs on http://localhost:8080
-   ```
-
-5. **Start frontend** (terminal 2)
-   ```bash
-   pnpm --filter @workspace/daycoach run dev
-   # Runs on http://localhost:5173 (or similar)
-   ```
-
-6. **Configure frontend API URL** — check `artifacts/daycoach/src/` for any API base URL config and point it to `http://localhost:8080`
-
----
-
-## 13. Incomplete / Next Steps
-
-These were in-progress or not finished when Replit credits ran out:
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Client tools registered in ElevenLabs dashboard | Pending | Code is complete; need to add tools in ElevenLabs UI for each agent |
-| Webhook URL configured in ElevenLabs dashboard | Pending | Code is complete; need to set URL in ElevenLabs UI for each agent |
-| Webhook `conversation_id` matching | Partial | Currently matches first NULL transcript row; can cause issues with concurrent calls |
-| Seed script path | Minor fix needed | Path in replit.md uses `scripts/node_modules/.bin/tsx`; use `pnpm --filter @workspace/scripts run tsx` instead |
+See [SETUP.md](./SETUP.md) for full clone-and-run instructions including ElevenLabs agent configuration.

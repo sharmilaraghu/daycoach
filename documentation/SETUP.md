@@ -1,98 +1,142 @@
-# Setup and Deployment
+# DayCoach — Local Setup Guide
 
-## What You Need
+## Prerequisites
 
-- Node.js 24
-- pnpm
-- PostgreSQL
-- ElevenLabs account
-- Replit project for deployment
+- Node.js 24+
+- pnpm (`npm install -g pnpm`)
+- A free [Neon](https://neon.tech) PostgreSQL database
+- An [ElevenLabs](https://elevenlabs.io) account (free tier works)
 
-## Required Environment Variables
+---
+
+## 1. Clone and install
 
 ```bash
-DATABASE_URL=
-SESSION_SECRET=
-ELEVENLABS_API_KEY=
-ELEVENLABS_AGENT_SUNNY=
-ELEVENLABS_AGENT_COACH=
-ELEVENLABS_AGENT_COMMANDER=
-ELEVENLABS_AGENT_CHAMPION=
+git clone https://github.com/sharmilaraghu/daycoach.git
+cd daycoach
+pnpm install
 ```
 
-## Local Setup
+---
+
+## 2. Create your `.env` file
 
 ```bash
-pnpm install
+cp .env.example .env
+```
+
+Fill in `.env` — instructions for each service are below.
+
+---
+
+## 3. Set up the database (Neon)
+
+1. Go to [neon.tech](https://neon.tech) → create a free project
+2. Copy the **connection string** (with `?sslmode=require`)
+3. Paste it into `DATABASE_URL` in your `.env`
+4. Apply the schema:
+
+```bash
 pnpm --filter @workspace/db run push
+```
+
+---
+
+## 4. Set up ElevenLabs agents
+
+You need **4 Conversational AI agents** — one per coaching persona.
+
+### 4a. Create each agent
+
+In the [ElevenLabs dashboard](https://elevenlabs.io) → Conversational AI → Create Agent:
+
+| Persona | Suggested name | `SESSION_SECRET` var |
+|---|---|---|
+| Sunny | DayCoach — Sunny | `ELEVENLABS_AGENT_SUNNY` |
+| Coach | DayCoach — Coach | `ELEVENLABS_AGENT_COACH` |
+| Commander | DayCoach — Commander | `ELEVENLABS_AGENT_COMMANDER` |
+| Champion | DayCoach — Champion | `ELEVENLABS_AGENT_CHAMPION` |
+
+Copy each **Agent ID** into your `.env`.
+
+### 4b. Enable overrides on each agent
+
+Without this the voice session will disconnect immediately.
+
+For each agent: **Agent Settings → Security → Allow client to override**
+
+Enable both:
+- **System prompt**
+- **First message**
+
+### 4c. Register client tools on each agent
+
+The coach calls these during live conversations to update the app.
+
+Add two tools to each agent (**Agent Settings → Tools → Add tool → Client tool**):
+
+**Tool 1**
+- Name: `complete_task`
+- Description: `Mark a task as complete`
+- Parameter: `task_id` — type `number`, required
+
+**Tool 2**
+- Name: `add_task`
+- Description: `Add a new task to today's list`
+- Parameter: `text` — type `string`, required
+
+### 4d. (Optional) Webhook — production only
+
+For transcripts to be saved after each session, set a post-call webhook:
+
+**Agent Settings → Post-call Webhook → URL:**
+```
+https://<your-public-domain>/api/agent/webhook
+```
+
+This won't fire on localhost (ElevenLabs can't reach it). Works on Replit / any public deployment.
+
+---
+
+## 5. Start the app
+
+```bash
 ./start.sh
 ```
 
-If you want demo data:
+- API: http://localhost:8080
+- Frontend: http://localhost:5173
+
+---
+
+## 6. Seed demo data (optional but recommended for demos)
+
+Populates 10 days of realistic task history across all 4 categories:
 
 ```bash
 pnpm --filter @workspace/scripts run seed-demo
 ```
 
-## ElevenLabs Checklist
+---
 
-For each coach agent in ElevenLabs:
-
-1. Create or select the agent
-2. Save the agent ID in the matching environment variable
-3. Enable **Client Tools**
-4. Add the webhook URL
-5. If you want private-agent sessions, make sure signed URL generation is configured correctly
-
-## Client Tools To Register
-
-- `complete_task`
-- `add_task`
-
-These tools let the coach update the app while the conversation is happening.
-
-## Webhook Setup
-
-Set the webhook URL to:
-
-```text
-https://<your-domain>/api/agent/webhook
-```
-
-Enable:
-
-- `conversation.ended`
-
-## Current Voice Flow
-
-The app currently supports two live voice session styles:
-
-- `checkin`: morning or evening coaching based on time of day
-- `review`: task review with live add/complete actions
-
-Session prompts are generated server-side and injected into ElevenLabs at runtime.
-
-## Replit Deployment Notes
-
-- Put all secrets in the Replit Secrets panel
-- Make sure the backend is reachable publicly for ElevenLabs webhooks
-- Confirm your app is using the correct production domain in webhook setup
-- The frontend runs with `PORT` and `BASE_PATH`; `start.sh` uses `PORT=5173 BASE_PATH=/` locally
-- Test one full conversation after deploy:
-  - start a session
-  - trigger a task action
-  - end the conversation
-  - confirm the transcript webhook lands successfully
-
-## Useful Commands
+## Useful commands
 
 ```bash
-pnpm run build
+# Run both servers
+./start.sh
+
+# Type check everything
 pnpm run typecheck
-pnpm --filter @workspace/api-spec run codegen
+
+# Apply schema changes to DB
 pnpm --filter @workspace/db run push
+
+# Re-generate API client after editing lib/api-spec/openapi.yaml
+pnpm --filter @workspace/api-spec run codegen
 ```
 
-## More Detail
+---
 
-For the full technical breakdown, see [PROJECT_REFERENCE.md](/Users/sharmila/Documents/Projects/DayCoach/documentation/PROJECT_REFERENCE.md).
+## More detail
+
+See [PROJECT_REFERENCE.md](./PROJECT_REFERENCE.md) for architecture, data flow, and deployment notes.

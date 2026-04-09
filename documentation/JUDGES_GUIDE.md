@@ -1,87 +1,94 @@
-# Judge Guide
+# DayCoach — Judges Guide
 
-![DayCoach Demo Screen](../artifacts/daycoach/public/opengraph.jpg)
+## What It Does
 
-## What DayCoach Solves
+DayCoach is a voice-powered daily accountability app. It connects you with an AI coach that knows your task history, adapts its tone based on your streak, and can update your task list mid-conversation.
 
-Most productivity apps stop at task capture. DayCoach focuses on the harder part: following through.
+The core insight: most productivity apps help you capture tasks. DayCoach focuses on the harder part — following through.
 
-It combines voice, accountability, and behavior-aware coaching so the user can:
+---
 
-- check in with a coach in the morning or evening
-- talk through vague or weak tasks in a dedicated review flow
-- update tasks live during a conversation
-- reflect honestly on what got done at the end of the day
+## Key Features to Evaluate
 
-## What To Look For In The Demo
+### 1. Adaptive voice coaching (4 personas)
 
-### Voice feels useful, not gimmicky
-The app is designed around conversation as the main interface, not as a decorative add-on.
+The app selects a coaching persona automatically based on behavior patterns:
 
-### The coach adapts
-The user does not always get the same tone. The app selects different coaching personas based on streaks, missed days, and completion behavior.
+| Persona | Triggered when | Tone |
+|---|---|---|
+| **Sunny** | Healthy streak (2+ days) | Warm, encouraging |
+| **Coach** | 1–2 missed days | Direct, calm |
+| **Commander** | 3+ missed days | Blunt, no excuses |
+| **Champion** | 100% done today | Hype, celebratory |
 
-### The app responds in real time
-During a live session, the coach can trigger task actions immediately. This is not just voice output; it changes the product state.
+The persona selection happens server-side at session start — the user doesn't choose it.
 
-Today those live actions are:
+### 2. Live task actions during conversation
 
-- adding a task
-- marking a task complete
+During a voice session, the coach can:
+- **Mark a task complete** — "mark my run as done" → task checks off in the UI immediately
+- **Add a task** — "add: finish the report by 4pm" → appears in the list during the call
 
-### ElevenLabs is deeply integrated
-This project uses multiple parts of the ElevenLabs stack in a practical way:
+These are ElevenLabs **client tools** — the agent calls a function in the browser, which hits the API and updates state in real time.
 
-- Conversational AI
-- client tools
-- post-call webhook
-- Voice Design API
-- TTS
+### 3. Task quality enforcement
 
-### It is built like a real product
-This is not a one-screen prototype. It uses a typed API, a real database, generated contracts, persistent task/history flows, and deployment-friendly architecture.
+When adding a task — voice or text — the app:
+- Detects vague input ("workout", "study", "work")
+- Returns a specific suggestion with spoken audio feedback (ElevenLabs TTS)
+- The voice coach also refuses to add vague tasks mid-session and asks for specifics first
 
-## Best Demo Flow
+### 4. Smart category detection
 
-### 1. Show the home screen
-Point out:
+Tasks are automatically tagged into 4 categories: **Health, Work, Learning, Mindset**. Uses keyword scoring + Levenshtein fuzzy matching (handles misspellings like "excercise" → Health).
 
-- today’s coach
-- streak and completion context
-- the voice entry points
-- the categorized task list
+### 5. History with per-day task breakdown
 
-### 2. Start a voice session
-Use **Start My Day** or **Review Tasks with Coach**.
+The History tab shows 14 days of data. Each day is expandable to show the individual tasks with completion state and category tags.
 
-Show that the coach:
+### 6. Post-call transcript storage
 
-- understands the current task list
-- pushes for specificity
-- behaves differently depending on the persona
+After each voice session, ElevenLabs fires a webhook to the API which stores the full transcript linked to the conversation log.
 
-### 3. Trigger a live task action
-Ask the coach to add a task or mark one complete.
+---
 
-This is the strongest proof point because the user sees the app state change during the conversation.
+## Best Demo Flow (5 minutes)
 
-### 4. Show the task intelligence layer
-Add a vague task manually and show that the app:
+**1. Show the home screen**
+- Point out today's coach name and the streak counter
+- Show the categorized task list
+- Note the progress bar
 
-- detects weak wording
-- suggests a more specific version
-- can generate spoken coaching feedback
+**2. Start a morning check-in**
+- Tap **Start My Day**
+- Speak a vague task ("add workout") — the coach should push back and ask for specifics
+- Speak a specific task ("add: run 5km before 9am") — coach adds it, task appears in the list
 
-### 5. End with reflection
-Use **End My Day** to show emotional tone, accountability, and behavior-aware responses.
+**3. Mark a task complete via voice**
+- Say "mark [task name] as done"
+- Watch the checkbox tick in real-time during the conversation
 
-## Why This Fits The Hackathon
+**4. Show task vagueness detection (manual)**
+- Type a vague task like "study" in the input box
+- The app surfaces a suggestion and plays a short audio coaching tip
 
-- It uses **Replit** as a realistic deployment path for a usable web app
-- It uses **ElevenLabs voice technology** as a core product mechanic
-- It demonstrates a clear consumer use case with immediate value
-- It is easy to understand quickly and compelling to watch in a short demo
+**5. Show the History tab**
+- Tap on any day to expand its task list
+- Show how the categories and completion states are preserved
 
-## One-Sentence Pitch
+---
 
-DayCoach is a voice-powered accountability coach that helps you plan your day, stay honest about execution, and feel like you are reporting to someone who actually remembers how you’ve been showing up.
+## ElevenLabs Integration Points
+
+| Feature | Where used |
+|---|---|
+| Conversational AI | Live coaching sessions (`Start My Day`, `End My Day`, `Review Tasks`) |
+| Client Tools | `complete_task` and `add_task` fire during conversation |
+| Post-call Webhook | Transcript stored after session ends |
+| TTS (text-to-speech) | Spoken coaching tip on vague task detection |
+
+---
+
+## One-Line Pitch
+
+> DayCoach is a voice accountability coach that adapts to how you've been showing up — and can update your task list while you're talking to it.
