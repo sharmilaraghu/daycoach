@@ -69,5 +69,6 @@ LOCAL_TOOL.md
 # Images folder (screenshots, not source code)
 images/
 
-# Replit-specific docs
-documentation/replit.md
+# Docs folder (content moved to README.md and JUDGES.md at root)
+documentation/
+replit.md
